@@ -31,12 +31,35 @@ h1, h2 {
   display: flex;
   align-items: center;
 }
+
 .user-selector label {
   margin-right: 5px;
 }
+
 .user-selector select {
   margin-right: 10px;
   padding: 5px;
+}
+
+/* Navigation Bar */
+#nav-bar {
+  display: flex;
+  justify-content: center;
+  background-color: #eee;
+  padding: 8px 0;
+}
+
+#nav-bar button {
+  background: none;
+  border: none;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+#nav-bar button.active {
+  font-weight: bold;
+  border-bottom: 2px solid #007bff;
 }
 
 /* Settings Panel */
@@ -59,12 +82,13 @@ h1, h2 {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
 }
+
 .modal-content {
   background: #fff;
   padding: 20px;
@@ -77,6 +101,7 @@ h1, h2 {
 .task-form {
   margin-bottom: 15px;
 }
+
 .task-form input[type="text"],
 .task-form input[type="number"],
 .task-form input[type="date"],
@@ -87,6 +112,7 @@ h1, h2 {
   border: 1px solid #ccc;
   border-radius: 3px;
 }
+
 .task-form button {
   width: 100%;
   padding: 10px;
@@ -96,11 +122,13 @@ h1, h2 {
   border-radius: 3px;
   cursor: pointer;
 }
+
 .columns {
   display: flex;
   flex-wrap: wrap;
   gap: 20px;
 }
+
 .column {
   background-color: #fff;
   padding: 15px;
@@ -115,6 +143,7 @@ h1, h2 {
   max-height: 500px;
   overflow-y: auto;
 }
+
 .task-item {
   background-color: #f1f1f1;
   padding: 10px;
@@ -125,22 +154,21 @@ h1, h2 {
 }
 
 /* Due Date Color Coding */
-/* Overdue: dark red */
 .task-item.overdue {
   border-left: 5px solid #8B0000;
   background-color: #f9d6d5;
 }
-/* Due Today: red */
+
 .task-item.due-today {
   border-left: 5px solid red;
   background-color: #ffe6e6;
 }
-/* 1-2 Days: orange */
+
 .task-item.almost-due {
   border-left: 5px solid #FFA500;
   background-color: #fff2cc;
 }
-/* 3-4 Days: greenish yellow */
+
 .task-item.due-soon {
   border-left: 5px solid #ADFF2F;
   background-color: #f0fff0;
@@ -172,6 +200,7 @@ h1, h2 {
 .task-actions {
   margin-top: 5px;
 }
+
 .task-actions button {
   padding: 5px 8px;
   margin-right: 5px;
@@ -179,28 +208,23 @@ h1, h2 {
   border-radius: 3px;
   cursor: pointer;
 }
+
 .task-actions button.complete-btn {
   background-color: #007bff;
   color: #fff;
 }
+
 .task-actions button.delete-btn {
   background-color: #dc3545;
   color: #fff;
 }
+
 .task-actions button.edit-btn {
   background-color: #ffc107;
   color: #333;
 }
 
-/* Animation for task success */
-@keyframes successAnimation {
-  0% { background-color: #ffe6e6; }
-  100% { background-color: #f1f1f1; }
-}
-.task-item.success {
-  animation: successAnimation 1s ease-out;
-}
-
+/* Edit Field Spacing */
 .edit-field {
   margin-bottom: 12px;
 }

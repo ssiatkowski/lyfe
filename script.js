@@ -1,8 +1,8 @@
 /* script.js */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app-compat.js";
 import { 
   getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc 
-} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore-compat.js";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -19,9 +19,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- DOM Ready ---
+//////////////////////////////////////////////////
+// DOM Ready
+//////////////////////////////////////////////////
 document.addEventListener("DOMContentLoaded", function () {
-  // --- Initialize Users & Current User (stored locally) ---
+  // --- Initialize Users & Current User ---
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
@@ -32,10 +34,12 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Populate Dropdowns & Settings ---
   updateUserDropdowns();
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
+
   document.getElementById("user-select").addEventListener("change", function () {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
   });
+
   document.getElementById("settings-btn").addEventListener("click", showSettings);
   document.getElementById("close-settings-btn").addEventListener("click", hideSettings);
   document.getElementById("add-user-btn").addEventListener("click", function () {
@@ -48,6 +52,17 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
   updateUserList();
+
+  // --- Navigation Bar Handlers ---
+  document.querySelectorAll("#nav-bar button").forEach(button => {
+    button.addEventListener("click", function() {
+      // Remove 'active' class from all nav buttons and add to the clicked one.
+      document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
+      this.classList.add("active");
+      const selectedType = this.getAttribute("data-type");
+      reorderColumns(selectedType);
+    });
+  });
 
   // --- Form Handlers ---
   document.getElementById("repeating-form").addEventListener("submit", async function (e) {
@@ -68,8 +83,31 @@ document.addEventListener("DOMContentLoaded", function () {
   setInterval(renderAllTasks, 60000);
 });
 
+//////////////////////////////////////////////////
+// Navigation: Reorder Columns Based on Selection
+//////////////////////////////////////////////////
+function reorderColumns(selectedType) {
+  const container = document.querySelector(".columns");
+  const repeating = document.getElementById("repeating-column");
+  const contacts = document.getElementById("contacts-column");
+  const todos = document.getElementById("todos-column");
+  container.innerHTML = "";
+  let order = [];
+  if (selectedType === "repeating") {
+    order = [repeating, contacts, todos];
+  } else if (selectedType === "contact") {
+    order = [contacts, repeating, todos];
+  } else if (selectedType === "todos") {
+    order = [todos, repeating, contacts];
+  } else {
+    order = [repeating, contacts, todos];
+  }
+  order.forEach(col => container.appendChild(col));
+}
 
-// --- User Management Functions ---
+//////////////////////////////////////////////////
+// User Management Functions
+//////////////////////////////////////////////////
 function updateUserDropdowns() {
   let users = JSON.parse(localStorage.getItem("users"));
   const options = ["All", ...users];
@@ -116,12 +154,12 @@ function hideSettings() {
   document.getElementById("settings-panel").style.display = "none";
 }
 
-
-// --- Utility Functions ---
+//////////////////////////////////////////////////
+// Utility Functions
+//////////////////////////////////////////////////
 function sortByDue(tasks, getDueDateFn) {
   return tasks.sort((a, b) => getDueDateFn(a) - getDueDateFn(b));
 }
-// getDueClass compares local midnight dates.
 function getDueClass(dueTime) {
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -150,8 +188,9 @@ function renderAllTasks() {
   renderTodos();
 }
 
-
-// --- Date Parsing Helpers ---
+//////////////////////////////////////////////////
+// Date Parsing Helpers
+//////////////////////////////////////////////////
 function formatDateForInput(timestamp) {
   const d = new Date(timestamp);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -162,8 +201,9 @@ function parseLocalDate(dateString) {
   return new Date(parts[0], parts[1] - 1, parts[2]);
 }
 
-
-// --- Edit Modal Functions ---
+//////////////////////////////////////////////////
+// Edit Modal Functions
+//////////////////////////////////////////////////
 function showEditModal(task, type, callback) {
   const modal = document.getElementById("edit-modal");
   const titleEl = document.getElementById("edit-modal-title");
@@ -214,13 +254,13 @@ function hideEditModal() {
   document.getElementById("edit-modal").style.display = "none";
 }
 
-
-// --- Repeating Tasks ---
+//////////////////////////////////////////////////
+// Repeating Tasks
+//////////////////////////////////////////////////
 async function getRepeatingTasks() {
   let tasks = [];
-  const repeatingCol = collection(db, "repeatingTasks");
-  const snapshot = await getDocs(repeatingCol);
-  snapshot.forEach(docSnap => {
+  const querySnapshot = await getDocs(collection(db, "repeatingTasks"));
+  querySnapshot.forEach(docSnap => {
     let data = docSnap.data();
     data.docId = docSnap.id;
     tasks.push(data);
@@ -257,11 +297,11 @@ async function renderRepeatingTasks() {
     const dueClass = getDueClass(task.nextDue);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    taskDiv.innerHTML =
-      `<span><strong>${task.name}</strong> (Every ${task.frequency} day(s))</span>
-       <small>Next due: ${new Date(task.nextDue).toLocaleDateString()}</small>
-       <small class="streak-info">Streak: ${task.streak}</small>
-       <small>Owner: ${task.owner}</small>`;
+    taskDiv.innerHTML = `
+      <span><strong>${task.name}</strong> (Every ${task.frequency} days)</span>
+      <small>Next due: ${new Date(task.nextDue).toLocaleDateString()}</small>
+      <small class="streak-info">Streak: ${task.streak}</small>
+      <small>Owner: ${task.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
     const completeBtn = document.createElement("button");
@@ -321,13 +361,13 @@ function editRepeatingTask(docId, task) {
   });
 }
 
-
-// --- Keep in Touch ---
+//////////////////////////////////////////////////
+// Keep in Touch Tasks
+//////////////////////////////////////////////////
 async function getContactTasks() {
   let tasks = [];
-  const contactCol = collection(db, "contactTasks");
-  const snapshot = await getDocs(contactCol);
-  snapshot.forEach(docSnap => {
+  const querySnapshot = await getDocs(collection(db, "contactTasks"));
+  querySnapshot.forEach(docSnap => {
     let data = docSnap.data();
     data.docId = docSnap.id;
     tasks.push(data);
@@ -338,7 +378,6 @@ async function addContactTask() {
   const owner = document.getElementById("c-owner").value;
   const contactName = document.getElementById("c-contact-name").value;
   const frequency = parseInt(document.getElementById("c-frequency").value);
-  // Use today's midnight as lastContact
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const newTask = {
@@ -365,11 +404,11 @@ async function renderContactTasks() {
     const dueClass = getDueClass(task.nextDue);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    taskDiv.innerHTML =
-      `<span><strong>${task.contactName}</strong> (Every ${task.frequency} day(s))</span>
-       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
-       <small class="streak-info">Streak: ${task.streak}</small>
-       <small>Owner: ${task.owner}</small>`;
+    taskDiv.innerHTML = `
+      <span><strong>${task.contactName}</strong> (Every ${task.frequency} days)</span>
+      <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
+      <small class="streak-info">Streak: ${task.streak}</small>
+      <small>Owner: ${task.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
     const completeBtn = document.createElement("button");
@@ -429,13 +468,13 @@ function editContactTask(docId, task) {
   });
 }
 
-
-// --- One-off Todos ---
+//////////////////////////////////////////////////
+// One-off Todos
+//////////////////////////////////////////////////
 async function getTodos() {
   let tasks = [];
-  const todosCol = collection(db, "todos");
-  const snapshot = await getDocs(todosCol);
-  snapshot.forEach(docSnap => {
+  const querySnapshot = await getDocs(collection(db, "todos"));
+  querySnapshot.forEach(docSnap => {
     let data = docSnap.data();
     data.docId = docSnap.id;
     tasks.push(data);
@@ -471,10 +510,10 @@ async function renderTodos() {
     const dueClass = getDueClass(todo.dueDate);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    taskDiv.innerHTML =
-      `<span><strong>${todo.name}</strong></span>
-       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
-       <small>Owner: ${todo.owner}</small>`;
+    taskDiv.innerHTML = `
+      <span><strong>${todo.name}</strong></span>
+      <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
+      <small>Owner: ${todo.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
     const completeBtn = document.createElement("button");
@@ -504,10 +543,10 @@ async function renderTodos() {
   completed.forEach(todo => {
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item completed";
-    taskDiv.innerHTML =
-      `<span><strong>${todo.name}</strong></span>
-       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
-       <small>Owner: ${todo.owner}</small>`;
+    taskDiv.innerHTML = `
+      <span><strong>${todo.name}</strong></span>
+      <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
+      <small>Owner: ${todo.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
     const deleteBtn = document.createElement("button");
