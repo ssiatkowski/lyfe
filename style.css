@@ -27,18 +27,15 @@ h1, h2 {
   align-items: center;
 }
 
-.user-selector {
-  display: flex;
-  align-items: center;
+/* Make current user selection larger */
+.user-selector select {
+  font-size: 1.5em;
+  padding: 8px;
+  margin-right: 10px;
 }
 
 .user-selector label {
   margin-right: 5px;
-}
-
-.user-selector select {
-  margin-right: 10px;
-  padding: 5px;
 }
 
 /* Navigation Bar */
@@ -82,7 +79,7 @@ h1, h2 {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0,0,0,0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,13 +182,13 @@ h1, h2 {
   font-size: 0.85em;
 }
 
-/* Streak styling for prominence */
-.streak-info {
-  font-weight: bold;
-  color: #2E8B57;
-  font-size: 1.1em;
+/* Streak Visual */
+.streak-visual {
+  font-size: 1em;
+  margin: 4px 0;
 }
 
+/* Task Actions */
 .task-actions {
   margin-top: 5px;
 }

@@ -33,11 +33,11 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
+  // Set default current user to "Alomi" (instead of "All")
   if (!localStorage.getItem("currentUser")) {
-    localStorage.setItem("currentUser", "All");
+    localStorage.setItem("currentUser", "Alomi");
   }
 
-  // --- Populate Dropdowns & Settings ---
   updateUserDropdowns();
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
 
@@ -46,23 +46,9 @@ document.addEventListener("DOMContentLoaded", function () {
     renderAllTasks();
   });
 
-  document.getElementById("settings-btn").addEventListener("click", showSettings);
-  document.getElementById("close-settings-btn").addEventListener("click", hideSettings);
-  document.getElementById("add-user-btn").addEventListener("click", function () {
-    const newUser = document.getElementById("new-user").value.trim();
-    if (newUser && newUser !== "All") {
-      addUser(newUser);
-      document.getElementById("new-user").value = "";
-      updateUserDropdowns();
-      updateUserList();
-    }
-  });
-  updateUserList();
-
   // --- Navigation Bar Handlers ---
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function () {
-      // Remove active class from all and add to the clicked one
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
       this.classList.add("active");
       const selectedType = this.getAttribute("data-type");
@@ -134,30 +120,9 @@ function updateUserDropdowns() {
       opt.textContent = user;
       select.appendChild(opt);
     });
+    // Set default owner to "Alomi"
+    select.value = "Alomi";
   });
-}
-function updateUserList() {
-  let users = JSON.parse(localStorage.getItem("users"));
-  const userListDiv = document.getElementById("user-list");
-  userListDiv.innerHTML = "";
-  users.forEach(user => {
-    const div = document.createElement("div");
-    div.textContent = user;
-    userListDiv.appendChild(div);
-  });
-}
-function addUser(newUser) {
-  let users = JSON.parse(localStorage.getItem("users"));
-  if (!users.includes(newUser)) {
-    users.push(newUser);
-    localStorage.setItem("users", JSON.stringify(users));
-  }
-}
-function showSettings() {
-  document.getElementById("settings-panel").style.display = "block";
-}
-function hideSettings() {
-  document.getElementById("settings-panel").style.display = "none";
 }
 
 //////////////////////////////////////////////////
@@ -173,13 +138,13 @@ function getDueClass(dueTime) {
   const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
   const diffDays = (dueMidnight - todayMidnight) / (24 * 60 * 60 * 1000);
   if (diffDays < 0) {
-    return " overdue";      // Overdue: dark red
+    return " overdue";
   } else if (diffDays === 0) {
-    return " due-today";    // Due today: red
+    return " due-today";
   } else if (diffDays <= 2) {
-    return " almost-due";   // 1-2 days: orange
+    return " almost-due";
   } else if (diffDays <= 4) {
-    return " due-soon";     // 3-4 days: greenish yellow
+    return " due-soon";
   }
   return "";
 }
@@ -205,6 +170,31 @@ function formatDateForInput(timestamp) {
 function parseLocalDate(dateString) {
   const parts = dateString.split("-");
   return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+//////////////////////////////////////////////////
+// Streak Visual Function
+//////////////////////////////////////////////////
+function getStreakVisual(streak) {
+  const effective = Math.min(streak, 110);
+  let stars = Math.floor(effective / 10);
+  let checks = effective % 10;
+  // Cap stars at 10.
+  stars = Math.min(stars, 10);
+  let visual = "";
+  if (stars > 0) {
+    // Display stars in one row.
+    for (let i = 0; i < stars; i++) {
+      visual += "⭐";
+    }
+    visual += "<br>";
+  }
+  if (checks > 0) {
+    for (let i = 0; i < checks; i++) {
+      visual += "✅";
+    }
+  }
+  return visual;
 }
 
 //////////////////////////////////////////////////
@@ -307,7 +297,7 @@ async function renderRepeatingTasks() {
     taskDiv.innerHTML = `
       <span><strong>${task.name}</strong> (Every ${task.frequency} days)</span>
       <small>Next due: ${new Date(task.nextDue).toLocaleDateString()}</small>
-      <small class="streak-info">Streak: ${task.streak}</small>
+      <div class="streak-visual">${getStreakVisual(task.streak)}</div>
       <small>Owner: ${task.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
@@ -415,7 +405,7 @@ async function renderContactTasks() {
     taskDiv.innerHTML = `
       <span><strong>${task.contactName}</strong> (Every ${task.frequency} days)</span>
       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
-      <small class="streak-info">Streak: ${task.streak}</small>
+      <div class="streak-visual">${getStreakVisual(task.streak)}</div>
       <small>Owner: ${task.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
@@ -519,7 +509,7 @@ async function renderTodos() {
     const dueClass = getDueClass(todo.dueDate);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    // Added an explicit <br> between the due date and owner lines.
+    // Insert an explicit <br> between due date and owner.
     taskDiv.innerHTML = `
       <span><strong>${todo.name}</strong></span>
       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>

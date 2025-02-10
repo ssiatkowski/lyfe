@@ -15,8 +15,8 @@
       <h1>Task Reminder App</h1>
       <div class="user-selector">
         <label for="user-select">Current User:</label>
+        <!-- Increase font size via CSS -->
         <select id="user-select"></select>
-        <button id="settings-btn">Settings</button>
       </div>
     </header>
 
@@ -67,13 +67,6 @@
         </div>
       </div>
     </div>
-    <!-- Settings Panel (for managing users) -->
-    <div id="settings-panel" class="settings-panel" style="display:none;">
-      <div id="user-list"></div>
-      <input type="text" id="new-user" placeholder="New User Name">
-      <button id="add-user-btn">Add User</button>
-      <button id="close-settings-btn">Close</button>
-    </div>
   </div>
 
   <!-- Edit Modal -->
@@ -88,6 +81,9 @@
     </div>
   </div>
 
+  <!-- Firebase SDKs (Modular) -->
+  <script type="module" src="https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js"></script>
+  <script type="module" src="https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js"></script>
   <!-- Our App Script -->
   <script type="module" src="script.js"></script>
 </body>
