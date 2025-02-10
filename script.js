@@ -1,9 +1,10 @@
 /* script.js */
-
-// Import necessary Firebase services.  Note the separate import for Firestore.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
+import { 
+  getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc 
+} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
 
+// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyC_BtuwYiwwmDpAJQuRt4x30YyPGTYvZ7s",
   authDomain: "lyfe-cacf7.firebaseapp.com",
@@ -14,25 +15,14 @@ const firebaseConfig = {
   measurementId: "G-WE8CC23QSC"
 };
 
-// Initialize Firebase
+// Initialize Firebase and Firestore
 const app = initializeApp(firebaseConfig);
-
-// Get a Firestore instance.  This is how you access Firestore.
 const db = getFirestore(app);
-
-// Now you can use db to interact with Firestore.  For example:
-// db.collection("yourCollection").add({...yourData})
-// ...other Firestore operations...
-
-
-
 
 // --- DOM Ready ---
 document.addEventListener("DOMContentLoaded", function () {
-
-  // --- Initialize Users & Current User ---
+  // --- Initialize Users & Current User (stored locally) ---
   if (!localStorage.getItem("users")) {
-    // Default users: Sebo and Alomi (do not include "All" in stored list)
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
   if (!localStorage.getItem("currentUser")) {
@@ -42,12 +32,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Populate Dropdowns & Settings ---
   updateUserDropdowns();
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
-
   document.getElementById("user-select").addEventListener("change", function () {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
   });
-
   document.getElementById("settings-btn").addEventListener("click", showSettings);
   document.getElementById("close-settings-btn").addEventListener("click", hideSettings);
   document.getElementById("add-user-btn").addEventListener("click", function () {
@@ -133,7 +121,7 @@ function hideSettings() {
 function sortByDue(tasks, getDueDateFn) {
   return tasks.sort((a, b) => getDueDateFn(a) - getDueDateFn(b));
 }
-// getDueClass now compares local midnight dates.
+// getDueClass compares local midnight dates.
 function getDueClass(dueTime) {
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -230,10 +218,11 @@ function hideEditModal() {
 // --- Repeating Tasks ---
 async function getRepeatingTasks() {
   let tasks = [];
-  const snapshot = await db.collection("repeatingTasks").get();
-  snapshot.forEach(doc => {
-    let data = doc.data();
-    data.docId = doc.id;
+  const repeatingCol = collection(db, "repeatingTasks");
+  const snapshot = await getDocs(repeatingCol);
+  snapshot.forEach(docSnap => {
+    let data = docSnap.data();
+    data.docId = docSnap.id;
     tasks.push(data);
   });
   return tasks;
@@ -245,13 +234,13 @@ async function addRepeatingTask() {
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const newTask = {
-    owner: owner,
-    name: name,
-    frequency: frequency,
+    owner,
+    name,
+    frequency,
     lastCompleted: todayMidnight,
     streak: 0,
   };
-  await db.collection("repeatingTasks").add(newTask);
+  await addDoc(collection(db, "repeatingTasks"), newTask);
   document.getElementById("repeating-form").reset();
   renderRepeatingTasks();
 }
@@ -310,11 +299,11 @@ async function markRepeatingTaskCompleted(docId, task) {
     task.streak = 0;
   }
   task.lastCompleted = now;
-  await db.collection("repeatingTasks").doc(docId).update(task);
+  await updateDoc(doc(db, "repeatingTasks", docId), task);
   renderRepeatingTasks();
 }
 async function deleteRepeatingTask(docId) {
-  await db.collection("repeatingTasks").doc(docId).delete();
+  await deleteDoc(doc(db, "repeatingTasks", docId));
   renderRepeatingTasks();
 }
 function editRepeatingTask(docId, task) {
@@ -327,7 +316,7 @@ function editRepeatingTask(docId, task) {
     if (!isNaN(freq) && freq > 0) {
       task.frequency = freq;
     }
-    await db.collection("repeatingTasks").doc(docId).update(task);
+    await updateDoc(doc(db, "repeatingTasks", docId), task);
     renderRepeatingTasks();
   });
 }
@@ -336,10 +325,11 @@ function editRepeatingTask(docId, task) {
 // --- Keep in Touch ---
 async function getContactTasks() {
   let tasks = [];
-  const snapshot = await db.collection("contactTasks").get();
-  snapshot.forEach(doc => {
-    let data = doc.data();
-    data.docId = doc.id;
+  const contactCol = collection(db, "contactTasks");
+  const snapshot = await getDocs(contactCol);
+  snapshot.forEach(docSnap => {
+    let data = docSnap.data();
+    data.docId = docSnap.id;
     tasks.push(data);
   });
   return tasks;
@@ -348,17 +338,17 @@ async function addContactTask() {
   const owner = document.getElementById("c-owner").value;
   const contactName = document.getElementById("c-contact-name").value;
   const frequency = parseInt(document.getElementById("c-frequency").value);
-  // Use today's midnight as the lastContact
+  // Use today's midnight as lastContact
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const newTask = {
-    owner: owner,
-    contactName: contactName,
-    frequency: frequency,
+    owner,
+    contactName,
+    frequency,
     lastContact: todayMidnight,
     streak: 0,
   };
-  await db.collection("contactTasks").add(newTask);
+  await addDoc(collection(db, "contactTasks"), newTask);
   document.getElementById("contacts-form").reset();
   renderContactTasks();
 }
@@ -417,11 +407,11 @@ async function markContactTask(docId, task) {
     task.streak = 0;
   }
   task.lastContact = now;
-  await db.collection("contactTasks").doc(docId).update(task);
+  await updateDoc(doc(db, "contactTasks", docId), task);
   renderContactTasks();
 }
 async function deleteContactTask(docId) {
-  await db.collection("contactTasks").doc(docId).delete();
+  await deleteDoc(doc(db, "contactTasks", docId));
   renderContactTasks();
 }
 function editContactTask(docId, task) {
@@ -434,7 +424,7 @@ function editContactTask(docId, task) {
     if (!isNaN(freq) && freq > 0) {
       task.frequency = freq;
     }
-    await db.collection("contactTasks").doc(docId).update(task);
+    await updateDoc(doc(db, "contactTasks", docId), task);
     renderContactTasks();
   });
 }
@@ -443,10 +433,11 @@ function editContactTask(docId, task) {
 // --- One-off Todos ---
 async function getTodos() {
   let tasks = [];
-  const snapshot = await db.collection("todos").get();
-  snapshot.forEach(doc => {
-    let data = doc.data();
-    data.docId = doc.id;
+  const todosCol = collection(db, "todos");
+  const snapshot = await getDocs(todosCol);
+  snapshot.forEach(docSnap => {
+    let data = docSnap.data();
+    data.docId = docSnap.id;
     tasks.push(data);
   });
   return tasks;
@@ -457,13 +448,13 @@ async function addTodo() {
   const dueDateStr = document.getElementById("t-due-date").value;
   const dueDate = parseLocalDate(dueDateStr).getTime();
   const newTodo = {
-    owner: owner,
-    name: name,
-    dueDate: dueDate,
+    owner,
+    name,
+    dueDate,
     completed: false,
     created: Date.now(),
   };
-  await db.collection("todos").add(newTodo);
+  await addDoc(collection(db, "todos"), newTodo);
   document.getElementById("todos-form").reset();
   renderTodos();
 }
@@ -531,11 +522,11 @@ async function renderTodos() {
   });
 }
 async function markTodoCompleted(docId, task) {
-  await db.collection("todos").doc(docId).update({ completed: true });
+  await updateDoc(doc(db, "todos", docId), { completed: true });
   renderTodos();
 }
 async function deleteTodo(docId) {
-  await db.collection("todos").doc(docId).delete();
+  await deleteDoc(doc(db, "todos", docId));
   renderTodos();
 }
 function editTodo(docId, task) {
@@ -544,7 +535,7 @@ function editTodo(docId, task) {
     if (!isNaN(newTimestamp)) {
       task.dueDate = newTimestamp;
     }
-    await db.collection("todos").doc(docId).update(task);
+    await updateDoc(doc(db, "todos", docId), task);
     renderTodos();
   });
 }
