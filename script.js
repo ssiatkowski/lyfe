@@ -4,7 +4,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
 
-
 const firebaseConfig = {
   apiKey: "AIzaSyC_BtuwYiwwmDpAJQuRt4x30YyPGTYvZ7s",
   authDomain: "lyfe-cacf7.firebaseapp.com",
