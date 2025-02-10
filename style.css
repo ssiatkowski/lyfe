@@ -139,11 +139,6 @@ h1, h2 {
 }
 
 /* Task List & Items */
-.task-list {
-  max-height: 500px;
-  overflow-y: auto;
-}
-
 .task-item {
   background-color: #f1f1f1;
   padding: 10px;

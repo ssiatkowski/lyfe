@@ -1,4 +1,4 @@
-// Import Firebase modules using the modular syntax:
+/* script.js */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
 import { 
   getFirestore, 
@@ -29,7 +29,7 @@ const db = getFirestore(app);
 // DOM Ready
 //////////////////////////////////////////////////
 document.addEventListener("DOMContentLoaded", function () {
-  // --- Initialize Users & Current User (stored locally) ---
+  // --- Initialize Users & Current User ---
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
@@ -62,6 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Navigation Bar Handlers ---
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function () {
+      // Remove active class from all and add to the clicked one
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
       this.classList.add("active");
       const selectedType = this.getAttribute("data-type");
@@ -518,9 +519,11 @@ async function renderTodos() {
     const dueClass = getDueClass(todo.dueDate);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
+    // Added an explicit <br> between the due date and owner lines.
     taskDiv.innerHTML = `
       <span><strong>${todo.name}</strong></span>
       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
+      <br>
       <small>Owner: ${todo.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
@@ -554,6 +557,7 @@ async function renderTodos() {
     taskDiv.innerHTML = `
       <span><strong>${todo.name}</strong></span>
       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
+      <br>
       <small>Owner: ${todo.owner}</small>`;
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
