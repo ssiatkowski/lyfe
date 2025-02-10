@@ -1,8 +1,15 @@
-/* script.js */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app-compat.js";
+// script.js
+// Import Firebase modules using the modular syntax:
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
 import { 
-  getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc 
-} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore-compat.js";
+  getFirestore, 
+  collection, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc 
+} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -23,7 +30,7 @@ const db = getFirestore(app);
 // DOM Ready
 //////////////////////////////////////////////////
 document.addEventListener("DOMContentLoaded", function () {
-  // --- Initialize Users & Current User ---
+  // --- Initialize Users & Current User (stored locally) ---
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
@@ -55,8 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // --- Navigation Bar Handlers ---
   document.querySelectorAll("#nav-bar button").forEach(button => {
-    button.addEventListener("click", function() {
-      // Remove 'active' class from all nav buttons and add to the clicked one.
+    button.addEventListener("click", function () {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
       this.classList.add("active");
       const selectedType = this.getAttribute("data-type");
@@ -259,7 +265,8 @@ function hideEditModal() {
 //////////////////////////////////////////////////
 async function getRepeatingTasks() {
   let tasks = [];
-  const querySnapshot = await getDocs(collection(db, "repeatingTasks"));
+  const colRef = collection(db, "repeatingTasks");
+  const querySnapshot = await getDocs(colRef);
   querySnapshot.forEach(docSnap => {
     let data = docSnap.data();
     data.docId = docSnap.id;
@@ -366,7 +373,8 @@ function editRepeatingTask(docId, task) {
 //////////////////////////////////////////////////
 async function getContactTasks() {
   let tasks = [];
-  const querySnapshot = await getDocs(collection(db, "contactTasks"));
+  const colRef = collection(db, "contactTasks");
+  const querySnapshot = await getDocs(colRef);
   querySnapshot.forEach(docSnap => {
     let data = docSnap.data();
     data.docId = docSnap.id;
@@ -473,7 +481,8 @@ function editContactTask(docId, task) {
 //////////////////////////////////////////////////
 async function getTodos() {
   let tasks = [];
-  const querySnapshot = await getDocs(collection(db, "todos"));
+  const colRef = collection(db, "todos");
+  const querySnapshot = await getDocs(colRef);
   querySnapshot.forEach(docSnap => {
     let data = docSnap.data();
     data.docId = docSnap.id;
