@@ -1,4 +1,3 @@
-// script.js
 // Import Firebase modules using the modular syntax:
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
 import { 
