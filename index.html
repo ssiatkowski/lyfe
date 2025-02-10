@@ -1,18 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Study Tracker</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Reminder App</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Google Fonts for a modern look -->
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- Main App Container -->
+  <div id="app-container" class="app-container">
+    <header class="header">
+      <h1>Task Reminder App</h1>
+      <div class="user-selector">
+        <label for="user-select">Current User:</label>
+        <select id="user-select"></select>
+        <button id="settings-btn">Settings</button>
+      </div>
+    </header>
     <div class="container">
-        <h1>Study Tracker</h1>
-        <label>
-            <input type="checkbox" id="studyCheckbox"> I studied today
-        </label>
+      <div class="columns">
+        <!-- Repeating Tasks Column -->
+        <div class="column" id="repeating-column">
+          <h2>Repeating Tasks</h2>
+          <form id="repeating-form" class="task-form">
+            <input type="text" id="r-task-name" placeholder="Task Name" required>
+            <input type="number" id="r-frequency" placeholder="Frequency (days)" min="1" required>
+            <label>Owner:</label>
+            <select id="r-owner"></select>
+            <button type="submit">Add Task</button>
+          </form>
+          <div id="repeating-list" class="task-list"></div>
+        </div>
+        <!-- Keep in Touch Column -->
+        <div class="column" id="contacts-column">
+          <h2>Keep in Touch</h2>
+          <form id="contacts-form" class="task-form">
+            <input type="text" id="c-contact-name" placeholder="Contact Name" required>
+            <input type="number" id="c-frequency" placeholder="Frequency (days)" min="1" required>
+            <label>Owner:</label>
+            <select id="c-owner"></select>
+            <button type="submit">Add Contact Task</button>
+          </form>
+          <div id="contacts-list" class="task-list"></div>
+        </div>
+        <!-- One-off Todos Column -->
+        <div class="column" id="todos-column">
+          <h2>One-off Todos</h2>
+          <form id="todos-form" class="task-form">
+            <input type="text" id="t-task-name" placeholder="Task Name" required>
+            <input type="date" id="t-due-date" required>
+            <label>Owner:</label>
+            <select id="t-owner"></select>
+            <button type="submit">Add Todo</button>
+          </form>
+          <div id="todos-list" class="task-list"></div>
+        </div>
+      </div>
     </div>
-    <script src="script.js"></script>
+    <!-- Settings Panel (for managing users) -->
+    <div id="settings-panel" class="settings-panel" style="display:none;">
+      <h2>User Settings</h2>
+      <div id="user-list"></div>
+      <input type="text" id="new-user" placeholder="New User Name">
+      <button id="add-user-btn">Add User</button>
+      <button id="close-settings-btn">Close</button>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="edit-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h2 id="edit-modal-title"></h2>
+      <form id="edit-form">
+        <div id="edit-fields"></div>
+        <button type="submit">Save</button>
+        <button type="button" id="edit-cancel-btn">Cancel</button>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="script.js"></script>
 </body>
 </html>

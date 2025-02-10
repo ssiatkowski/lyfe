@@ -1,34 +1,551 @@
-document.addEventListener('DOMContentLoaded', (event) => {
-    const checkbox = document.getElementById('studyCheckbox');
+/* script.js */
 
-    // Load checkbox state from localStorage
-    const checked = localStorage.getItem('studyChecked');
-    if (checked === 'true') {
-        checkbox.checked = true;
+// Import necessary Firebase services.  Note the separate import for Firestore.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_BtuwYiwwmDpAJQuRt4x30YyPGTYvZ7s",
+  authDomain: "lyfe-cacf7.firebaseapp.com",
+  projectId: "lyfe-cacf7",
+  storageBucket: "lyfe-cacf7.firebasestorage.app",
+  messagingSenderId: "119442487958",
+  appId: "1:119442487958:web:e218fafb50513ad717e0b7",
+  measurementId: "G-WE8CC23QSC"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+// Get a Firestore instance.  This is how you access Firestore.
+const db = getFirestore(app);
+
+// Now you can use db to interact with Firestore.  For example:
+// db.collection("yourCollection").add({...yourData})
+// ...other Firestore operations...
+
+
+
+
+// --- DOM Ready ---
+document.addEventListener("DOMContentLoaded", function () {
+
+  // --- Initialize Users & Current User ---
+  if (!localStorage.getItem("users")) {
+    // Default users: Sebo and Alomi (do not include "All" in stored list)
+    localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
+  }
+  if (!localStorage.getItem("currentUser")) {
+    localStorage.setItem("currentUser", "All");
+  }
+
+  // --- Populate Dropdowns & Settings ---
+  updateUserDropdowns();
+  document.getElementById("user-select").value = localStorage.getItem("currentUser");
+
+  document.getElementById("user-select").addEventListener("change", function () {
+    localStorage.setItem("currentUser", this.value);
+    renderAllTasks();
+  });
+
+  document.getElementById("settings-btn").addEventListener("click", showSettings);
+  document.getElementById("close-settings-btn").addEventListener("click", hideSettings);
+  document.getElementById("add-user-btn").addEventListener("click", function () {
+    const newUser = document.getElementById("new-user").value.trim();
+    if (newUser && newUser !== "All") {
+      addUser(newUser);
+      document.getElementById("new-user").value = "";
+      updateUserDropdowns();
+      updateUserList();
     }
+  });
+  updateUserList();
 
-    // Save checkbox state to localStorage
-    checkbox.addEventListener('change', () => {
-        localStorage.setItem('studyChecked', checkbox.checked);
-    });
+  // --- Form Handlers ---
+  document.getElementById("repeating-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    await addRepeatingTask();
+  });
+  document.getElementById("contacts-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    await addContactTask();
+  });
+  document.getElementById("todos-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    await addTodo();
+  });
 
-    // Function to reset checkbox at 4 AM
-    const resetCheckbox = () => {
-        const now = new Date();
-        const nextReset = new Date();
-        nextReset.setHours(4, 0, 0, 0); // Set the time to 4 AM today
-
-        if (now > nextReset) {
-            nextReset.setDate(nextReset.getDate() + 1); // Move to 4 AM next day if 4 AM has passed today
-        }
-
-        const timeToReset = nextReset - now;
-        setTimeout(() => {
-            localStorage.setItem('studyChecked', 'false');
-            checkbox.checked = false;
-            resetCheckbox(); // Schedule the next reset
-        }, timeToReset);
-    };
-
-    resetCheckbox(); // Initial call to set the reset schedule
+  // --- Initial Render ---
+  renderAllTasks();
+  setInterval(renderAllTasks, 60000);
 });
+
+
+// --- User Management Functions ---
+function updateUserDropdowns() {
+  let users = JSON.parse(localStorage.getItem("users"));
+  const options = ["All", ...users];
+  const headerSelect = document.getElementById("user-select");
+  headerSelect.innerHTML = "";
+  options.forEach(user => {
+    const opt = document.createElement("option");
+    opt.value = user;
+    opt.textContent = user;
+    headerSelect.appendChild(opt);
+  });
+  ["r-owner", "c-owner", "t-owner"].forEach(id => {
+    const select = document.getElementById(id);
+    select.innerHTML = "";
+    options.forEach(user => {
+      const opt = document.createElement("option");
+      opt.value = user;
+      opt.textContent = user;
+      select.appendChild(opt);
+    });
+  });
+}
+function updateUserList() {
+  let users = JSON.parse(localStorage.getItem("users"));
+  const userListDiv = document.getElementById("user-list");
+  userListDiv.innerHTML = "";
+  users.forEach(user => {
+    const div = document.createElement("div");
+    div.textContent = user;
+    userListDiv.appendChild(div);
+  });
+}
+function addUser(newUser) {
+  let users = JSON.parse(localStorage.getItem("users"));
+  if (!users.includes(newUser)) {
+    users.push(newUser);
+    localStorage.setItem("users", JSON.stringify(users));
+  }
+}
+function showSettings() {
+  document.getElementById("settings-panel").style.display = "block";
+}
+function hideSettings() {
+  document.getElementById("settings-panel").style.display = "none";
+}
+
+
+// --- Utility Functions ---
+function sortByDue(tasks, getDueDateFn) {
+  return tasks.sort((a, b) => getDueDateFn(a) - getDueDateFn(b));
+}
+// getDueClass now compares local midnight dates.
+function getDueClass(dueTime) {
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const dueDate = new Date(dueTime);
+  const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+  const diffDays = (dueMidnight - todayMidnight) / (24 * 60 * 60 * 1000);
+  if (diffDays < 0) {
+    return " overdue";      // Overdue: dark red
+  } else if (diffDays === 0) {
+    return " due-today";    // Due today: red
+  } else if (diffDays <= 2) {
+    return " almost-due";   // 1-2 days: orange
+  } else if (diffDays <= 4) {
+    return " due-soon";     // 3-4 days: greenish yellow
+  }
+  return "";
+}
+function filterTasksByUser(tasks) {
+  const currentUser = localStorage.getItem("currentUser");
+  if (currentUser === "All") return tasks;
+  return tasks.filter(task => task.owner === currentUser || task.owner === "All");
+}
+function renderAllTasks() {
+  renderRepeatingTasks();
+  renderContactTasks();
+  renderTodos();
+}
+
+
+// --- Date Parsing Helpers ---
+function formatDateForInput(timestamp) {
+  const d = new Date(timestamp);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().split("T")[0];
+}
+function parseLocalDate(dateString) {
+  const parts = dateString.split("-");
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+
+// --- Edit Modal Functions ---
+function showEditModal(task, type, callback) {
+  const modal = document.getElementById("edit-modal");
+  const titleEl = document.getElementById("edit-modal-title");
+  const fieldsDiv = document.getElementById("edit-fields");
+  fieldsDiv.innerHTML = "";
+  function createField(labelText, inputType, value, inputId) {
+    const container = document.createElement("div");
+    container.className = "edit-field";
+    const label = document.createElement("label");
+    label.textContent = labelText;
+    label.style.display = "block";
+    const input = document.createElement("input");
+    input.type = inputType;
+    input.value = value;
+    input.id = inputId;
+    input.style.marginTop = "4px";
+    container.appendChild(label);
+    container.appendChild(input);
+    return container;
+  }
+  if (type === "repeating") {
+    titleEl.textContent = "Edit Repeating Task";
+    fieldsDiv.appendChild(createField("Last Completed Date:", "date", formatDateForInput(task.lastCompleted), "edit-date"));
+    fieldsDiv.appendChild(createField("Frequency (days):", "number", task.frequency, "edit-frequency"));
+  } else if (type === "contact") {
+    titleEl.textContent = "Edit Keep In Touch Task";
+    fieldsDiv.appendChild(createField("Last Contact Date:", "date", formatDateForInput(task.lastContact), "edit-date"));
+    fieldsDiv.appendChild(createField("Frequency (days):", "number", task.frequency, "edit-frequency"));
+  } else if (type === "todo") {
+    titleEl.textContent = "Edit One-off Task";
+    fieldsDiv.appendChild(createField("Due Date:", "date", formatDateForInput(task.dueDate), "edit-date"));
+  }
+  modal.style.display = "flex";
+  const form = document.getElementById("edit-form");
+  form.onsubmit = function(e) {
+    e.preventDefault();
+    const newDate = document.getElementById("edit-date").value;
+    let newFreq = null;
+    if (type === "repeating" || type === "contact") {
+      newFreq = document.getElementById("edit-frequency").value;
+    }
+    callback(newDate, newFreq);
+    hideEditModal();
+  };
+  document.getElementById("edit-cancel-btn").onclick = hideEditModal;
+}
+function hideEditModal() {
+  document.getElementById("edit-modal").style.display = "none";
+}
+
+
+// --- Repeating Tasks ---
+async function getRepeatingTasks() {
+  let tasks = [];
+  const snapshot = await db.collection("repeatingTasks").get();
+  snapshot.forEach(doc => {
+    let data = doc.data();
+    data.docId = doc.id;
+    tasks.push(data);
+  });
+  return tasks;
+}
+async function addRepeatingTask() {
+  const owner = document.getElementById("r-owner").value;
+  const name = document.getElementById("r-task-name").value;
+  const frequency = parseInt(document.getElementById("r-frequency").value);
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const newTask = {
+    owner: owner,
+    name: name,
+    frequency: frequency,
+    lastCompleted: todayMidnight,
+    streak: 0,
+  };
+  await db.collection("repeatingTasks").add(newTask);
+  document.getElementById("repeating-form").reset();
+  renderRepeatingTasks();
+}
+async function renderRepeatingTasks() {
+  let tasks = await getRepeatingTasks();
+  let filtered = filterTasksByUser(tasks);
+  filtered.forEach(task => {
+    task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  filtered = sortByDue(filtered, task => task.nextDue);
+  const list = document.getElementById("repeating-list");
+  list.innerHTML = "";
+  filtered.forEach(task => {
+    const dueClass = getDueClass(task.nextDue);
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "task-item" + dueClass;
+    taskDiv.innerHTML =
+      `<span><strong>${task.name}</strong> (Every ${task.frequency} day(s))</span>
+       <small>Next due: ${new Date(task.nextDue).toLocaleDateString()}</small>
+       <small class="streak-info">Streak: ${task.streak}</small>
+       <small>Owner: ${task.owner}</small>`;
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "task-actions";
+    const completeBtn = document.createElement("button");
+    completeBtn.className = "complete-btn";
+    completeBtn.innerText = "Completed Today";
+    completeBtn.addEventListener("click", async function () {
+      await markRepeatingTaskCompleted(task.docId, task);
+    });
+    actionsDiv.appendChild(completeBtn);
+    const editBtn = document.createElement("button");
+    editBtn.className = "edit-btn";
+    editBtn.innerText = "Edit";
+    editBtn.addEventListener("click", function () {
+      editRepeatingTask(task.docId, task);
+    });
+    actionsDiv.appendChild(editBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-btn";
+    deleteBtn.innerText = "Delete";
+    deleteBtn.addEventListener("click", async function () {
+      await deleteRepeatingTask(task.docId);
+    });
+    actionsDiv.appendChild(deleteBtn);
+    taskDiv.appendChild(actionsDiv);
+    list.appendChild(taskDiv);
+  });
+}
+async function markRepeatingTaskCompleted(docId, task) {
+  let now = Date.now();
+  const prevDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
+  const gracePeriod = 24 * 60 * 60 * 1000;
+  if (now - prevDue <= gracePeriod) {
+    task.streak = (task.streak || 0) + 1;
+  } else {
+    task.streak = 0;
+  }
+  task.lastCompleted = now;
+  await db.collection("repeatingTasks").doc(docId).update(task);
+  renderRepeatingTasks();
+}
+async function deleteRepeatingTask(docId) {
+  await db.collection("repeatingTasks").doc(docId).delete();
+  renderRepeatingTasks();
+}
+function editRepeatingTask(docId, task) {
+  showEditModal(task, "repeating", async function(newDate, newFreq) {
+    let newTimestamp = parseLocalDate(newDate).getTime();
+    if (!isNaN(newTimestamp)) {
+      task.lastCompleted = newTimestamp;
+    }
+    let freq = parseInt(newFreq);
+    if (!isNaN(freq) && freq > 0) {
+      task.frequency = freq;
+    }
+    await db.collection("repeatingTasks").doc(docId).update(task);
+    renderRepeatingTasks();
+  });
+}
+
+
+// --- Keep in Touch ---
+async function getContactTasks() {
+  let tasks = [];
+  const snapshot = await db.collection("contactTasks").get();
+  snapshot.forEach(doc => {
+    let data = doc.data();
+    data.docId = doc.id;
+    tasks.push(data);
+  });
+  return tasks;
+}
+async function addContactTask() {
+  const owner = document.getElementById("c-owner").value;
+  const contactName = document.getElementById("c-contact-name").value;
+  const frequency = parseInt(document.getElementById("c-frequency").value);
+  // Use today's midnight as the lastContact
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const newTask = {
+    owner: owner,
+    contactName: contactName,
+    frequency: frequency,
+    lastContact: todayMidnight,
+    streak: 0,
+  };
+  await db.collection("contactTasks").add(newTask);
+  document.getElementById("contacts-form").reset();
+  renderContactTasks();
+}
+async function renderContactTasks() {
+  let tasks = await getContactTasks();
+  let filtered = filterTasksByUser(tasks);
+  filtered.forEach(task => {
+    task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  filtered = sortByDue(filtered, task => task.nextDue);
+  const list = document.getElementById("contacts-list");
+  list.innerHTML = "";
+  filtered.forEach(task => {
+    const dueClass = getDueClass(task.nextDue);
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "task-item" + dueClass;
+    taskDiv.innerHTML =
+      `<span><strong>${task.contactName}</strong> (Every ${task.frequency} day(s))</span>
+       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
+       <small class="streak-info">Streak: ${task.streak}</small>
+       <small>Owner: ${task.owner}</small>`;
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "task-actions";
+    const completeBtn = document.createElement("button");
+    completeBtn.className = "complete-btn";
+    completeBtn.innerText = "Completed Today";
+    completeBtn.addEventListener("click", async function () {
+      await markContactTask(task.docId, task);
+    });
+    actionsDiv.appendChild(completeBtn);
+    const editBtn = document.createElement("button");
+    editBtn.className = "edit-btn";
+    editBtn.innerText = "Edit";
+    editBtn.addEventListener("click", function () {
+      editContactTask(task.docId, task);
+    });
+    actionsDiv.appendChild(editBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-btn";
+    deleteBtn.innerText = "Delete";
+    deleteBtn.addEventListener("click", async function () {
+      await deleteContactTask(task.docId);
+    });
+    actionsDiv.appendChild(deleteBtn);
+    taskDiv.appendChild(actionsDiv);
+    list.appendChild(taskDiv);
+  });
+}
+async function markContactTask(docId, task) {
+  let now = Date.now();
+  const prevDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
+  const gracePeriod = 24 * 60 * 60 * 1000;
+  if (now - prevDue <= gracePeriod) {
+    task.streak = (task.streak || 0) + 1;
+  } else {
+    task.streak = 0;
+  }
+  task.lastContact = now;
+  await db.collection("contactTasks").doc(docId).update(task);
+  renderContactTasks();
+}
+async function deleteContactTask(docId) {
+  await db.collection("contactTasks").doc(docId).delete();
+  renderContactTasks();
+}
+function editContactTask(docId, task) {
+  showEditModal(task, "contact", async function(newDate, newFreq) {
+    let newTimestamp = parseLocalDate(newDate).getTime();
+    if (!isNaN(newTimestamp)) {
+      task.lastContact = newTimestamp;
+    }
+    let freq = parseInt(newFreq);
+    if (!isNaN(freq) && freq > 0) {
+      task.frequency = freq;
+    }
+    await db.collection("contactTasks").doc(docId).update(task);
+    renderContactTasks();
+  });
+}
+
+
+// --- One-off Todos ---
+async function getTodos() {
+  let tasks = [];
+  const snapshot = await db.collection("todos").get();
+  snapshot.forEach(doc => {
+    let data = doc.data();
+    data.docId = doc.id;
+    tasks.push(data);
+  });
+  return tasks;
+}
+async function addTodo() {
+  const owner = document.getElementById("t-owner").value;
+  const name = document.getElementById("t-task-name").value;
+  const dueDateStr = document.getElementById("t-due-date").value;
+  const dueDate = parseLocalDate(dueDateStr).getTime();
+  const newTodo = {
+    owner: owner,
+    name: name,
+    dueDate: dueDate,
+    completed: false,
+    created: Date.now(),
+  };
+  await db.collection("todos").add(newTodo);
+  document.getElementById("todos-form").reset();
+  renderTodos();
+}
+async function renderTodos() {
+  let tasks = await getTodos();
+  let filtered = filterTasksByUser(tasks);
+  let uncompleted = filtered.filter(t => !t.completed);
+  let completed = filtered.filter(t => t.completed);
+  uncompleted = sortByDue(uncompleted, t => t.dueDate);
+  completed = sortByDue(completed, t => t.dueDate);
+  const list = document.getElementById("todos-list");
+  list.innerHTML = "";
+  uncompleted.forEach(todo => {
+    const dueClass = getDueClass(todo.dueDate);
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "task-item" + dueClass;
+    taskDiv.innerHTML =
+      `<span><strong>${todo.name}</strong></span>
+       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
+       <small>Owner: ${todo.owner}</small>`;
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "task-actions";
+    const completeBtn = document.createElement("button");
+    completeBtn.className = "complete-btn";
+    completeBtn.innerText = "Mark as Completed";
+    completeBtn.addEventListener("click", async function () {
+      await markTodoCompleted(todo.docId, todo);
+    });
+    actionsDiv.appendChild(completeBtn);
+    const editBtn = document.createElement("button");
+    editBtn.className = "edit-btn";
+    editBtn.innerText = "Edit";
+    editBtn.addEventListener("click", function () {
+      editTodo(todo.docId, todo);
+    });
+    actionsDiv.appendChild(editBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-btn";
+    deleteBtn.innerText = "Delete";
+    deleteBtn.addEventListener("click", async function () {
+      await deleteTodo(todo.docId);
+    });
+    actionsDiv.appendChild(deleteBtn);
+    taskDiv.appendChild(actionsDiv);
+    list.appendChild(taskDiv);
+  });
+  completed.forEach(todo => {
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "task-item completed";
+    taskDiv.innerHTML =
+      `<span><strong>${todo.name}</strong></span>
+       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
+       <small>Owner: ${todo.owner}</small>`;
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "task-actions";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-btn";
+    deleteBtn.innerText = "Delete";
+    deleteBtn.addEventListener("click", async function () {
+      await deleteTodo(todo.docId);
+    });
+    actionsDiv.appendChild(deleteBtn);
+    taskDiv.appendChild(actionsDiv);
+    list.appendChild(taskDiv);
+  });
+}
+async function markTodoCompleted(docId, task) {
+  await db.collection("todos").doc(docId).update({ completed: true });
+  renderTodos();
+}
+async function deleteTodo(docId) {
+  await db.collection("todos").doc(docId).delete();
+  renderTodos();
+}
+function editTodo(docId, task) {
+  showEditModal(task, "todo", async function(newDate) {
+    let newTimestamp = parseLocalDate(newDate).getTime();
+    if (!isNaN(newTimestamp)) {
+      task.dueDate = newTimestamp;
+    }
+    await db.collection("todos").doc(docId).update(task);
+    renderTodos();
+  });
+}
