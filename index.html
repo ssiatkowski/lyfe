@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- Prevent mobile zooming -->
+  <!-- Prevent mobile zooming on inputs -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Task Reminder App</title>
   <link rel="stylesheet" href="style.css" />
@@ -16,7 +16,6 @@
       <h1>Task Reminder App</h1>
       <div class="user-selector">
         <label for="user-select">Current User:</label>
-        <!-- Enlarged by CSS -->
         <select id="user-select"></select>
       </div>
     </header>
@@ -75,8 +74,7 @@
           <h2>Birthdays/Occasions</h2>
           <form id="birthdays-form" class="task-form">
             <input type="text" id="b-task-name" placeholder="Occasion Name" required>
-            <!-- We'll use a date input to let the user pick month and day;
-                 the year will be adjusted automatically -->
+            <!-- Use a date input; the year will be ignored -->
             <input type="date" id="b-date" required>
             <label>Owner:</label>
             <select id="b-owner"></select>
@@ -86,6 +84,14 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Settings Panel (for managing users) -->
+  <div id="settings-panel" class="settings-panel" style="display:none;">
+    <div id="user-list"></div>
+    <input type="text" id="new-user" placeholder="New User Name">
+    <button id="add-user-btn">Add User</button>
+    <button id="close-settings-btn">Close</button>
   </div>
 
   <!-- Edit Modal -->

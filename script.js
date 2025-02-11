@@ -29,23 +29,19 @@ const db = getFirestore(app);
 // DOM Ready
 //////////////////////////////////////////////////
 document.addEventListener("DOMContentLoaded", function () {
-  // --- Initialize Users & Current User ---
+  // Initialize Users & Current User (default to Alomi)
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
-  // Set default current user to "Alomi"
   if (!localStorage.getItem("currentUser")) {
     localStorage.setItem("currentUser", "Alomi");
   }
-
   updateUserDropdowns();
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
-
   document.getElementById("user-select").addEventListener("change", function () {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
   });
-
   document.getElementById("settings-btn").addEventListener("click", showSettings);
   document.getElementById("close-settings-btn").addEventListener("click", hideSettings);
   document.getElementById("add-user-btn").addEventListener("click", function () {
@@ -59,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   updateUserList();
 
-  // --- Navigation Bar Handlers ---
+  // Navigation Bar Handlers
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function () {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
@@ -69,7 +65,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // --- Form Handlers ---
+  // Form Handlers
   document.getElementById("repeating-form").addEventListener("submit", async function (e) {
     e.preventDefault();
     await addRepeatingTask();
@@ -87,13 +83,13 @@ document.addEventListener("DOMContentLoaded", function () {
     await addBirthday();
   });
 
-  // --- Initial Render ---
+  // Initial Render
   renderAllTasks();
   setInterval(renderAllTasks, 60000);
 });
 
 //////////////////////////////////////////////////
-// Navigation: Reorder Columns Based on Selection
+// Navigation: Reorder Columns
 //////////////////////////////////////////////////
 function reorderColumns(selectedType) {
   const container = document.querySelector(".columns");
@@ -131,6 +127,7 @@ function updateUserDropdowns() {
     opt.textContent = user;
     headerSelect.appendChild(opt);
   });
+  // Update all owner dropdowns (including the new birthdays one, with id "b-owner")
   ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
     const select = document.getElementById(id);
     if (select) {
@@ -141,7 +138,6 @@ function updateUserDropdowns() {
         opt.textContent = user;
         select.appendChild(opt);
       });
-      // Set default owner to "Alomi"
       select.value = "Alomi";
     }
   });
@@ -216,22 +212,6 @@ function formatDateForInput(timestamp) {
 function parseLocalDate(dateString) {
   const parts = dateString.split("-");
   return new Date(parts[0], parts[1] - 1, parts[2]);
-}
-
-// Helper for Birthdays: Given a month-day date (from the input), compute the next occurrence.
-function getNextOccurrence(dateString) {
-  // Parse the input date (which contains year, but we ignore it)
-  const inputDate = new Date(dateString);
-  const month = inputDate.getMonth();
-  const day = inputDate.getDate();
-  const now = new Date();
-  let year = now.getFullYear();
-  let nextOccurrence = new Date(year, month, day).getTime();
-  // If this year's occurrence has passed, use next year.
-  if (nextOccurrence < now.getTime()) {
-    nextOccurrence = new Date(year + 1, month, day).getTime();
-  }
-  return nextOccurrence;
 }
 
 //////////////////////////////////////////////////
@@ -661,7 +641,6 @@ async function addBirthday() {
   const owner = document.getElementById("b-owner").value;
   const name = document.getElementById("b-task-name").value;
   const dateStr = document.getElementById("b-date").value;
-  // Compute next occurrence based on the month and day in the input
   const nextOccurrence = getNextOccurrence(dateStr);
   const newTask = {
     owner,
@@ -677,7 +656,6 @@ async function addBirthday() {
 async function renderBirthdays() {
   let tasks = await getBirthdays();
   let filtered = filterTasksByUser(tasks);
-  // For birthdays, we simply sort by dueDate
   filtered = sortByDue(filtered, task => task.dueDate);
   const list = document.getElementById("birthdays-list");
   list.innerHTML = "";
@@ -718,7 +696,6 @@ async function renderBirthdays() {
   });
 }
 async function markBirthdayCompleted(docId, task) {
-  // When a birthday/occasion is completed, update its dueDate to next year's occurrence.
   const dueDate = new Date(task.dueDate);
   const nextYear = dueDate.getFullYear() + 1;
   const newDue = new Date(nextYear, dueDate.getMonth(), dueDate.getDate()).getTime();
@@ -732,7 +709,6 @@ async function deleteBirthday(docId) {
 }
 function editBirthday(docId, task) {
   showEditModal(task, "birthday", async function(newDate) {
-    // When editing a birthday, recalc the next occurrence from the selected date.
     let newDue = getNextOccurrence(newDate);
     task.dueDate = newDue;
     await updateDoc(doc(db, "birthdays", docId), task);
@@ -741,10 +717,9 @@ function editBirthday(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// Helper for Birthdays: Compute next occurrence
+// Helper: Compute Next Occurrence for Birthdays/Occasions
 //////////////////////////////////////////////////
 function getNextOccurrence(dateString) {
-  // dateString is in YYYY-MM-DD format; we ignore the year.
   const inputDate = new Date(dateString);
   const month = inputDate.getMonth();
   const day = inputDate.getDate();

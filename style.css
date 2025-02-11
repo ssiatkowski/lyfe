@@ -6,17 +6,14 @@ body {
   background-color: #f8f9fa;
   color: #333;
 }
-
 h1, h2 {
   margin: 0 0 10px 0;
 }
-
 .container {
   max-width: 1200px;
   margin: 20px auto;
   padding: 0 20px;
 }
-
 /* Header */
 .header {
   background-color: #007bff;
@@ -26,18 +23,15 @@ h1, h2 {
   justify-content: space-between;
   align-items: center;
 }
-
 /* Enlarged current user selection */
 .user-selector select {
   font-size: 1.5em;
   padding: 8px;
   margin-right: 10px;
 }
-
 .user-selector label {
   margin-right: 5px;
 }
-
 /* Navigation Bar */
 #nav-bar {
   display: flex;
@@ -45,7 +39,6 @@ h1, h2 {
   background-color: #eee;
   padding: 8px 0;
 }
-
 #nav-bar button {
   background: none;
   border: none;
@@ -53,12 +46,10 @@ h1, h2 {
   cursor: pointer;
   font-size: 1em;
 }
-
 #nav-bar button.active {
   font-weight: bold;
   border-bottom: 2px solid #007bff;
 }
-
 /* Settings Panel */
 .settings-panel {
   position: fixed;
@@ -71,7 +62,6 @@ h1, h2 {
   border-radius: 5px;
   z-index: 1000;
 }
-
 /* Modal Styles */
 .modal {
   position: fixed;
@@ -85,7 +75,6 @@ h1, h2 {
   justify-content: center;
   z-index: 2000;
 }
-
 .modal-content {
   background: #fff;
   padding: 20px;
@@ -93,12 +82,10 @@ h1, h2 {
   width: 90%;
   max-width: 400px;
 }
-
 /* Task Form & Columns */
 .task-form {
   margin-bottom: 15px;
 }
-
 .task-form input[type="text"],
 .task-form input[type="number"],
 .task-form input[type="date"],
@@ -109,7 +96,6 @@ h1, h2 {
   border: 1px solid #ccc;
   border-radius: 3px;
 }
-
 .task-form button {
   width: 100%;
   padding: 10px;
@@ -119,23 +105,27 @@ h1, h2 {
   border-radius: 3px;
   cursor: pointer;
 }
-
+/* Columns */
 .columns {
   display: flex;
   flex-wrap: wrap;
   gap: 20px;
 }
-
+/* For screens wider than 1024px, force a single row */
+@media (min-width: 1024px) {
+  .columns {
+    flex-wrap: nowrap;
+  }
+}
 .column {
   background-color: #fff;
   padding: 15px;
   border-radius: 5px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   flex: 1;
-  min-width: 300px;
+  min-width: 200px;
 }
-
-/* Task List & Items */
+/* Task Items */
 .task-item {
   background-color: #f1f1f1;
   padding: 10px;
@@ -144,55 +134,44 @@ h1, h2 {
   display: flex;
   flex-direction: column;
 }
-
-/* Due Date Color Coding */
 .task-item.overdue {
   border-left: 5px solid #8B0000;
   background-color: #f9d6d5;
 }
-
 .task-item.due-today {
   border-left: 5px solid red;
   background-color: #ffe6e6;
 }
-
 .task-item.almost-due {
   border-left: 5px solid #FFA500;
   background-color: #fff2cc;
 }
-
 .task-item.due-soon {
   border-left: 5px solid #ADFF2F;
   background-color: #f0fff0;
 }
-
 .task-item.completed {
   text-decoration: line-through;
   opacity: 0.6;
 }
-
 .task-item > span {
   font-weight: 500;
 }
-
 .task-item small {
   color: #555;
   display: block;
   margin-top: 4px;
   font-size: 0.85em;
 }
-
 /* Streak Visual */
 .streak-visual {
   font-size: 1em;
   margin: 4px 0;
 }
-
 /* Task Actions */
 .task-actions {
   margin-top: 5px;
 }
-
 .task-actions button {
   padding: 5px 8px;
   margin-right: 5px;
@@ -200,22 +179,18 @@ h1, h2 {
   border-radius: 3px;
   cursor: pointer;
 }
-
 .task-actions button.complete-btn {
   background-color: #007bff;
   color: #fff;
 }
-
 .task-actions button.delete-btn {
   background-color: #dc3545;
   color: #fff;
 }
-
 .task-actions button.edit-btn {
   background-color: #ffc107;
   color: #333;
 }
-
 /* Edit Field Spacing */
 .edit-field {
   margin-bottom: 12px;
