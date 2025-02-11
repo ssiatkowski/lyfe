@@ -293,6 +293,7 @@ async function addRepeatingTask() {
   };
   await addDoc(collection(db, "repeatingTasks"), newTask);
   document.getElementById("repeating-form").reset();
+  updateOwnerDropdowns();
   renderRepeatingTasks();
 }
 async function renderRepeatingTasks() {
@@ -401,6 +402,7 @@ async function addContactTask() {
   };
   await addDoc(collection(db, "contactTasks"), newTask);
   document.getElementById("contacts-form").reset();
+  updateOwnerDropdowns();
   renderContactTasks();
 }
 async function renderContactTasks() {
@@ -508,6 +510,7 @@ async function addTodo() {
   };
   await addDoc(collection(db, "todos"), newTodo);
   document.getElementById("todos-form").reset();
+  updateOwnerDropdowns();
   renderTodos();
 }
 async function renderTodos() {
@@ -623,6 +626,7 @@ async function addBirthday() {
   };
   await addDoc(collection(db, "birthdays"), newTask);
   document.getElementById("birthdays-form").reset();
+  updateOwnerDropdowns();
   renderBirthdays();
 }
 async function renderBirthdays() {
