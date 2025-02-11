@@ -50,18 +50,6 @@ h1, h2 {
   font-weight: bold;
   border-bottom: 2px solid #007bff;
 }
-/* Settings Panel */
-.settings-panel {
-  position: fixed;
-  top: 20%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #fff;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  z-index: 1000;
-}
 /* Modal Styles */
 .modal {
   position: fixed;

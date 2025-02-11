@@ -42,18 +42,6 @@ document.addEventListener("DOMContentLoaded", function () {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
   });
-  document.getElementById("settings-btn").addEventListener("click", showSettings);
-  document.getElementById("close-settings-btn").addEventListener("click", hideSettings);
-  document.getElementById("add-user-btn").addEventListener("click", function () {
-    const newUser = document.getElementById("new-user").value.trim();
-    if (newUser && newUser !== "All") {
-      addUser(newUser);
-      document.getElementById("new-user").value = "";
-      updateUserDropdowns();
-      updateUserList();
-    }
-  });
-  updateUserList();
 
   // Navigation Bar Handlers
   document.querySelectorAll("#nav-bar button").forEach(button => {
@@ -141,29 +129,6 @@ function updateUserDropdowns() {
       select.value = "Alomi";
     }
   });
-}
-function updateUserList() {
-  let users = JSON.parse(localStorage.getItem("users"));
-  const userListDiv = document.getElementById("user-list");
-  userListDiv.innerHTML = "";
-  users.forEach(user => {
-    const div = document.createElement("div");
-    div.textContent = user;
-    userListDiv.appendChild(div);
-  });
-}
-function addUser(newUser) {
-  let users = JSON.parse(localStorage.getItem("users"));
-  if (!users.includes(newUser)) {
-    users.push(newUser);
-    localStorage.setItem("users", JSON.stringify(users));
-  }
-}
-function showSettings() {
-  document.getElementById("settings-panel").style.display = "block";
-}
-function hideSettings() {
-  document.getElementById("settings-panel").style.display = "none";
 }
 
 //////////////////////////////////////////////////
