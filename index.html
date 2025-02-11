@@ -61,7 +61,9 @@
           <h2>One-off Todos</h2>
           <form id="todos-form" class="task-form">
             <input type="text" id="t-task-name" placeholder="Task Name" required>
+            <label>Due Date:</label>
             <input type="date" id="t-due-date" required>
+            <br>
             <label>Owner:</label>
             <select id="t-owner"></select>
             <button type="submit">Add Todo</button>
@@ -75,7 +77,9 @@
           <form id="birthdays-form" class="task-form">
             <input type="text" id="b-task-name" placeholder="Occasion Name" required>
             <!-- Use a date input; the year will be ignored -->
+            <label>Date:</label>
             <input type="date" id="b-date" required>
+            <br>
             <label>Owner:</label>
             <select id="b-owner"></select>
             <button type="submit">Add Occasion</button>

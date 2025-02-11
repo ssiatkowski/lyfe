@@ -36,11 +36,12 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!localStorage.getItem("currentUser")) {
     localStorage.setItem("currentUser", "Alomi");
   }
-  updateUserDropdowns();
+  updateUserDropdowns(localStorage.getItem("currentUser"));
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
   document.getElementById("user-select").addEventListener("change", function () {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
+    updateUserDropdowns(this.value);
   });
 
   // Navigation Bar Handlers
@@ -526,7 +527,7 @@ async function renderTodos() {
     actionsDiv.className = "task-actions";
     const completeBtn = document.createElement("button");
     completeBtn.className = "complete-btn";
-    completeBtn.innerText = "Mark as Completed";
+    completeBtn.innerText = "Mark Completed";
     completeBtn.addEventListener("click", async function () {
       await markTodoCompleted(todo.docId, todo);
     });
