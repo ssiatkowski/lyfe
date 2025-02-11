@@ -183,7 +183,7 @@ function parseLocalDate(dateString) {
 // Streak Visual Function
 //////////////////////////////////////////////////
 function getStreakVisual(streak) {
-  const effective = Math.min(streak, 110);
+  const effective = Math.min(streak, 100);
   let stars = Math.floor(effective / 10);
   let checks = effective % 10;
   stars = Math.min(stars, 10);
@@ -606,7 +606,8 @@ async function addBirthday() {
   const owner = document.getElementById("b-owner").value;
   const name = document.getElementById("b-task-name").value;
   const dateStr = document.getElementById("b-date").value;
-  const nextOccurrence = getNextOccurrence(dateStr);
+  const dueDate = parseLocalDate(dateStr).getTime();
+  const nextOccurrence = getNextOccurrence(dueDate);
   const newTask = {
     owner,
     name,
