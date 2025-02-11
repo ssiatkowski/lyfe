@@ -27,7 +27,7 @@ h1, h2 {
   align-items: center;
 }
 
-/* Make current user selection larger */
+/* Enlarged current user selection */
 .user-selector select {
   font-size: 1.5em;
   padding: 8px;

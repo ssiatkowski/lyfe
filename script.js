@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
-  // Set default current user to "Alomi" (instead of "All")
+  // Set default current user to "Alomi"
   if (!localStorage.getItem("currentUser")) {
     localStorage.setItem("currentUser", "Alomi");
   }
@@ -45,6 +45,19 @@ document.addEventListener("DOMContentLoaded", function () {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
   });
+
+  document.getElementById("settings-btn").addEventListener("click", showSettings);
+  document.getElementById("close-settings-btn").addEventListener("click", hideSettings);
+  document.getElementById("add-user-btn").addEventListener("click", function () {
+    const newUser = document.getElementById("new-user").value.trim();
+    if (newUser && newUser !== "All") {
+      addUser(newUser);
+      document.getElementById("new-user").value = "";
+      updateUserDropdowns();
+      updateUserList();
+    }
+  });
+  updateUserList();
 
   // --- Navigation Bar Handlers ---
   document.querySelectorAll("#nav-bar button").forEach(button => {
@@ -69,6 +82,10 @@ document.addEventListener("DOMContentLoaded", function () {
     e.preventDefault();
     await addTodo();
   });
+  document.getElementById("birthdays-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    await addBirthday();
+  });
 
   // --- Initial Render ---
   renderAllTasks();
@@ -83,16 +100,19 @@ function reorderColumns(selectedType) {
   const repeating = document.getElementById("repeating-column");
   const contacts = document.getElementById("contacts-column");
   const todos = document.getElementById("todos-column");
+  const birthdays = document.getElementById("birthdays-column");
   container.innerHTML = "";
   let order = [];
   if (selectedType === "repeating") {
-    order = [repeating, contacts, todos];
+    order = [repeating, contacts, todos, birthdays];
   } else if (selectedType === "contact") {
-    order = [contacts, repeating, todos];
+    order = [contacts, repeating, todos, birthdays];
   } else if (selectedType === "todos") {
-    order = [todos, repeating, contacts];
+    order = [todos, repeating, contacts, birthdays];
+  } else if (selectedType === "birthdays") {
+    order = [birthdays, repeating, contacts, todos];
   } else {
-    order = [repeating, contacts, todos];
+    order = [repeating, contacts, todos, birthdays];
   }
   order.forEach(col => container.appendChild(col));
 }
@@ -111,18 +131,43 @@ function updateUserDropdowns() {
     opt.textContent = user;
     headerSelect.appendChild(opt);
   });
-  ["r-owner", "c-owner", "t-owner"].forEach(id => {
+  ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
     const select = document.getElementById(id);
-    select.innerHTML = "";
-    options.forEach(user => {
-      const opt = document.createElement("option");
-      opt.value = user;
-      opt.textContent = user;
-      select.appendChild(opt);
-    });
-    // Set default owner to "Alomi"
-    select.value = "Alomi";
+    if (select) {
+      select.innerHTML = "";
+      options.forEach(user => {
+        const opt = document.createElement("option");
+        opt.value = user;
+        opt.textContent = user;
+        select.appendChild(opt);
+      });
+      // Set default owner to "Alomi"
+      select.value = "Alomi";
+    }
   });
+}
+function updateUserList() {
+  let users = JSON.parse(localStorage.getItem("users"));
+  const userListDiv = document.getElementById("user-list");
+  userListDiv.innerHTML = "";
+  users.forEach(user => {
+    const div = document.createElement("div");
+    div.textContent = user;
+    userListDiv.appendChild(div);
+  });
+}
+function addUser(newUser) {
+  let users = JSON.parse(localStorage.getItem("users"));
+  if (!users.includes(newUser)) {
+    users.push(newUser);
+    localStorage.setItem("users", JSON.stringify(users));
+  }
+}
+function showSettings() {
+  document.getElementById("settings-panel").style.display = "block";
+}
+function hideSettings() {
+  document.getElementById("settings-panel").style.display = "none";
 }
 
 //////////////////////////////////////////////////
@@ -157,6 +202,7 @@ function renderAllTasks() {
   renderRepeatingTasks();
   renderContactTasks();
   renderTodos();
+  renderBirthdays();
 }
 
 //////////////////////////////////////////////////
@@ -172,6 +218,22 @@ function parseLocalDate(dateString) {
   return new Date(parts[0], parts[1] - 1, parts[2]);
 }
 
+// Helper for Birthdays: Given a month-day date (from the input), compute the next occurrence.
+function getNextOccurrence(dateString) {
+  // Parse the input date (which contains year, but we ignore it)
+  const inputDate = new Date(dateString);
+  const month = inputDate.getMonth();
+  const day = inputDate.getDate();
+  const now = new Date();
+  let year = now.getFullYear();
+  let nextOccurrence = new Date(year, month, day).getTime();
+  // If this year's occurrence has passed, use next year.
+  if (nextOccurrence < now.getTime()) {
+    nextOccurrence = new Date(year + 1, month, day).getTime();
+  }
+  return nextOccurrence;
+}
+
 //////////////////////////////////////////////////
 // Streak Visual Function
 //////////////////////////////////////////////////
@@ -179,11 +241,9 @@ function getStreakVisual(streak) {
   const effective = Math.min(streak, 110);
   let stars = Math.floor(effective / 10);
   let checks = effective % 10;
-  // Cap stars at 10.
   stars = Math.min(stars, 10);
   let visual = "";
   if (stars > 0) {
-    // Display stars in one row.
     for (let i = 0; i < stars; i++) {
       visual += "⭐";
     }
@@ -231,6 +291,9 @@ function showEditModal(task, type, callback) {
   } else if (type === "todo") {
     titleEl.textContent = "Edit One-off Task";
     fieldsDiv.appendChild(createField("Due Date:", "date", formatDateForInput(task.dueDate), "edit-date"));
+  } else if (type === "birthday") {
+    titleEl.textContent = "Edit Birthday/Occasion";
+    fieldsDiv.appendChild(createField("Occasion Date:", "date", formatDateForInput(task.dueDate), "edit-date"));
   }
   modal.style.display = "flex";
   const form = document.getElementById("edit-form");
@@ -509,7 +572,6 @@ async function renderTodos() {
     const dueClass = getDueClass(todo.dueDate);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    // Insert an explicit <br> between due date and owner.
     taskDiv.innerHTML = `
       <span><strong>${todo.name}</strong></span>
       <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
@@ -579,4 +641,118 @@ function editTodo(docId, task) {
     await updateDoc(doc(db, "todos", docId), task);
     renderTodos();
   });
+}
+
+//////////////////////////////////////////////////
+// Birthdays/Occasions
+//////////////////////////////////////////////////
+async function getBirthdays() {
+  let tasks = [];
+  const colRef = collection(db, "birthdays");
+  const querySnapshot = await getDocs(colRef);
+  querySnapshot.forEach(docSnap => {
+    let data = docSnap.data();
+    data.docId = docSnap.id;
+    tasks.push(data);
+  });
+  return tasks;
+}
+async function addBirthday() {
+  const owner = document.getElementById("b-owner").value;
+  const name = document.getElementById("b-task-name").value;
+  const dateStr = document.getElementById("b-date").value;
+  // Compute next occurrence based on the month and day in the input
+  const nextOccurrence = getNextOccurrence(dateStr);
+  const newTask = {
+    owner,
+    name,
+    dueDate: nextOccurrence,
+    completed: false,
+    created: Date.now(),
+  };
+  await addDoc(collection(db, "birthdays"), newTask);
+  document.getElementById("birthdays-form").reset();
+  renderBirthdays();
+}
+async function renderBirthdays() {
+  let tasks = await getBirthdays();
+  let filtered = filterTasksByUser(tasks);
+  // For birthdays, we simply sort by dueDate
+  filtered = sortByDue(filtered, task => task.dueDate);
+  const list = document.getElementById("birthdays-list");
+  list.innerHTML = "";
+  filtered.forEach(task => {
+    const dueClass = getDueClass(task.dueDate);
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "task-item" + dueClass;
+    taskDiv.innerHTML = `
+      <span><strong>${task.name}</strong></span>
+      <small>Next Occurrence: ${new Date(task.dueDate).toLocaleDateString()}</small>
+      <br>
+      <small>Owner: ${task.owner}</small>`;
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "task-actions";
+    const completeBtn = document.createElement("button");
+    completeBtn.className = "complete-btn";
+    completeBtn.innerText = "Completed";
+    completeBtn.addEventListener("click", async function () {
+      await markBirthdayCompleted(task.docId, task);
+    });
+    actionsDiv.appendChild(completeBtn);
+    const editBtn = document.createElement("button");
+    editBtn.className = "edit-btn";
+    editBtn.innerText = "Edit";
+    editBtn.addEventListener("click", function () {
+      editBirthday(task.docId, task);
+    });
+    actionsDiv.appendChild(editBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-btn";
+    deleteBtn.innerText = "Delete";
+    deleteBtn.addEventListener("click", async function () {
+      await deleteBirthday(task.docId);
+    });
+    actionsDiv.appendChild(deleteBtn);
+    taskDiv.appendChild(actionsDiv);
+    list.appendChild(taskDiv);
+  });
+}
+async function markBirthdayCompleted(docId, task) {
+  // When a birthday/occasion is completed, update its dueDate to next year's occurrence.
+  const dueDate = new Date(task.dueDate);
+  const nextYear = dueDate.getFullYear() + 1;
+  const newDue = new Date(nextYear, dueDate.getMonth(), dueDate.getDate()).getTime();
+  task.dueDate = newDue;
+  await updateDoc(doc(db, "birthdays", docId), task);
+  renderBirthdays();
+}
+async function deleteBirthday(docId) {
+  await deleteDoc(doc(db, "birthdays", docId));
+  renderBirthdays();
+}
+function editBirthday(docId, task) {
+  showEditModal(task, "birthday", async function(newDate) {
+    // When editing a birthday, recalc the next occurrence from the selected date.
+    let newDue = getNextOccurrence(newDate);
+    task.dueDate = newDue;
+    await updateDoc(doc(db, "birthdays", docId), task);
+    renderBirthdays();
+  });
+}
+
+//////////////////////////////////////////////////
+// Helper for Birthdays: Compute next occurrence
+//////////////////////////////////////////////////
+function getNextOccurrence(dateString) {
+  // dateString is in YYYY-MM-DD format; we ignore the year.
+  const inputDate = new Date(dateString);
+  const month = inputDate.getMonth();
+  const day = inputDate.getDate();
+  const now = new Date();
+  let year = now.getFullYear();
+  let nextOccurrence = new Date(year, month, day).getTime();
+  if (nextOccurrence < now.getTime()) {
+    nextOccurrence = new Date(year + 1, month, day).getTime();
+  }
+  return nextOccurrence;
 }

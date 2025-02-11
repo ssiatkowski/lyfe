@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Prevent mobile zooming -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Task Reminder App</title>
   <link rel="stylesheet" href="style.css" />
   <!-- Google Fonts for a modern look -->
@@ -15,7 +16,7 @@
       <h1>Task Reminder App</h1>
       <div class="user-selector">
         <label for="user-select">Current User:</label>
-        <!-- Increase font size via CSS -->
+        <!-- Enlarged by CSS -->
         <select id="user-select"></select>
       </div>
     </header>
@@ -25,6 +26,7 @@
       <button data-type="repeating" class="active">Repeating Tasks</button>
       <button data-type="contact">Keep in Touch</button>
       <button data-type="todos">One-off Todos</button>
+      <button data-type="birthdays">Birthdays/Occasions</button>
     </nav>
 
     <div class="container">
@@ -41,6 +43,7 @@
           </form>
           <div id="repeating-list" class="task-list"></div>
         </div>
+
         <!-- Keep in Touch Column -->
         <div class="column" id="contacts-column">
           <h2>Keep in Touch</h2>
@@ -53,6 +56,7 @@
           </form>
           <div id="contacts-list" class="task-list"></div>
         </div>
+
         <!-- One-off Todos Column -->
         <div class="column" id="todos-column">
           <h2>One-off Todos</h2>
@@ -64,6 +68,21 @@
             <button type="submit">Add Todo</button>
           </form>
           <div id="todos-list" class="task-list"></div>
+        </div>
+
+        <!-- Birthdays/Occasions Column -->
+        <div class="column" id="birthdays-column">
+          <h2>Birthdays/Occasions</h2>
+          <form id="birthdays-form" class="task-form">
+            <input type="text" id="b-task-name" placeholder="Occasion Name" required>
+            <!-- We'll use a date input to let the user pick month and day;
+                 the year will be adjusted automatically -->
+            <input type="date" id="b-date" required>
+            <label>Owner:</label>
+            <select id="b-owner"></select>
+            <button type="submit">Add Occasion</button>
+          </form>
+          <div id="birthdays-list" class="task-list"></div>
         </div>
       </div>
     </div>
