@@ -36,12 +36,12 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!localStorage.getItem("currentUser")) {
     localStorage.setItem("currentUser", "Alomi");
   }
-  updateUserDropdowns(localStorage.getItem("currentUser"));
+  updateUserDropdowns();
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
   document.getElementById("user-select").addEventListener("change", function () {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
-    updateUserDropdowns(this.value);
+    updateUserDropdowns();
   });
 
   // Navigation Bar Handlers
@@ -105,17 +105,7 @@ function reorderColumns(selectedType) {
 //////////////////////////////////////////////////
 // User Management Functions
 //////////////////////////////////////////////////
-function updateUserDropdowns(currentUser) {
-  let users = JSON.parse(localStorage.getItem("users"));
-  const options = ["All", ...users];
-  const headerSelect = document.getElementById("user-select");
-  headerSelect.innerHTML = "";
-  options.forEach(user => {
-    const opt = document.createElement("option");
-    opt.value = user;
-    opt.textContent = user;
-    headerSelect.appendChild(opt);
-  });
+function updateUserDropdowns() {
   // Update all owner dropdowns (including the new birthdays one, with id "b-owner")
   ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
     const select = document.getElementById(id);
@@ -127,7 +117,7 @@ function updateUserDropdowns(currentUser) {
         opt.textContent = user;
         select.appendChild(opt);
       });
-      select.value = currentUser;
+      select.value = localStorage.getItem("currentUser");
     }
   });
 }
