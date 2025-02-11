@@ -105,7 +105,7 @@ function reorderColumns(selectedType) {
 //////////////////////////////////////////////////
 // User Management Functions
 //////////////////////////////////////////////////
-function updateUserDropdowns() {
+function updateUserDropdowns(currentUser) {
   let users = JSON.parse(localStorage.getItem("users"));
   const options = ["All", ...users];
   const headerSelect = document.getElementById("user-select");
@@ -127,7 +127,7 @@ function updateUserDropdowns() {
         opt.textContent = user;
         select.appendChild(opt);
       });
-      select.value = "Alomi";
+      select.value = currentUser;
     }
   });
 }
