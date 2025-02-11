@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", function () {
     localStorage.setItem("currentUser", "Alomi");
   }
   updateUserDropdowns();
+  updateOwnerDropdowns();
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
   document.getElementById("user-select").addEventListener("change", function () {
     localStorage.setItem("currentUser", this.value);
