@@ -106,6 +106,8 @@ function reorderColumns(selectedType) {
 // User Management Functions
 //////////////////////////////////////////////////
 function updateUserDropdowns() {
+  let users = JSON.parse(localStorage.getItem("users"));
+  const options = ["All", ...users];
   // Update all owner dropdowns (including the new birthdays one, with id "b-owner")
   ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
     const select = document.getElementById(id);
