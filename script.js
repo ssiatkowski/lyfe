@@ -21,15 +21,14 @@ const firebaseConfig = {
   measurementId: "G-WE8CC23QSC"
 };
 
-// Initialize Firebase and Firestore
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 //////////////////////////////////////////////////
 // DOM Ready
 //////////////////////////////////////////////////
-document.addEventListener("DOMContentLoaded", function () {
-  // Initialize Users & Current User (default to Alomi)
+document.addEventListener("DOMContentLoaded", () => {
+  // Initialize users (default to Alomi)
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
@@ -39,15 +38,15 @@ document.addEventListener("DOMContentLoaded", function () {
   updateUserDropdowns();
   updateOwnerDropdowns();
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
-  document.getElementById("user-select").addEventListener("change", function () {
+  document.getElementById("user-select").addEventListener("change", function() {
     localStorage.setItem("currentUser", this.value);
     renderAllTasks();
     updateOwnerDropdowns();
   });
 
-  // Navigation Bar Handlers (including new "View All" tab)
+  // Navigation Bar Handlers (including View All)
   document.querySelectorAll("#nav-bar button").forEach(button => {
-    button.addEventListener("click", function () {
+    button.addEventListener("click", function() {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
       this.classList.add("active");
       const selectedType = this.getAttribute("data-type");
@@ -56,32 +55,34 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // Form Handlers
-  document.getElementById("repeating-form").addEventListener("submit", async function (e) {
+  document.getElementById("repeating-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     await addRepeatingTask();
   });
-  document.getElementById("contacts-form").addEventListener("submit", async function (e) {
+  document.getElementById("contacts-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     await addContactTask();
   });
-  document.getElementById("todos-form").addEventListener("submit", async function (e) {
+  document.getElementById("todos-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     await addTodo();
   });
-  document.getElementById("birthdays-form").addEventListener("submit", async function (e) {
+  document.getElementById("birthdays-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     await addBirthday();
   });
 
-  // Initial Render: start with standard columns
+  // Initial Render (default view: columns)
   renderAllTasks();
   setInterval(renderAllTasks, 60000);
 });
 
 //////////////////////////////////////////////////
-// Navigation: Reorder Columns / View All
+// Navigation / Reorder Columns / View All
 //////////////////////////////////////////////////
 function reorderColumns(selectedType) {
+  // Assume your HTML has a container with id "columns-container" for the 4-column view,
+  // and a container with id "all-tasks-view" for the combined view.
   const columnsContainer = document.getElementById("columns-container");
   const allView = document.getElementById("all-tasks-view");
   if (selectedType === "all") {
@@ -91,6 +92,7 @@ function reorderColumns(selectedType) {
   } else {
     columnsContainer.style.display = "flex";
     allView.style.display = "none";
+    // Rearrange columns according to selected type.
     const repeating = document.getElementById("repeating-column");
     const contacts = document.getElementById("contacts-column");
     const todos = document.getElementById("todos-column");
@@ -114,7 +116,7 @@ function reorderColumns(selectedType) {
 }
 
 //////////////////////////////////////////////////
-// User Management Functions
+// User Management
 //////////////////////////////////////////////////
 function updateUserDropdowns() {
   let users = JSON.parse(localStorage.getItem("users"));
@@ -145,28 +147,12 @@ function updateOwnerDropdowns() {
     }
   });
 }
-function updateUserList() {
-  let users = JSON.parse(localStorage.getItem("users"));
-  const userListDiv = document.getElementById("user-list");
-  userListDiv.innerHTML = "";
-  users.forEach(user => {
-    const div = document.createElement("div");
-    div.textContent = user;
-    userListDiv.appendChild(div);
-  });
-}
 function addUser(newUser) {
   let users = JSON.parse(localStorage.getItem("users"));
   if (!users.includes(newUser)) {
     users.push(newUser);
     localStorage.setItem("users", JSON.stringify(users));
   }
-}
-function showSettings() {
-  document.getElementById("settings-panel").style.display = "block";
-}
-function hideSettings() {
-  document.getElementById("settings-panel").style.display = "none";
 }
 
 //////////////////////////////////////////////////
@@ -181,16 +167,11 @@ function getDueClass(dueTime) {
   const dueDate = new Date(dueTime);
   const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
   const diffDays = (dueMidnight - todayMidnight) / (24 * 60 * 60 * 1000);
-  if (diffDays < 0) {
-    return " overdue";
-  } else if (diffDays === 0) {
-    return " due-today";
-  } else if (diffDays <= 2) {
-    return " almost-due";
-  } else if (diffDays <= 4) {
-    return " due-soon";
-  }
-  return "";
+  if (diffDays < 0) return " overdue";
+  else if (diffDays === 0) return " due-today";
+  else if (diffDays <= 2) return " almost-due";
+  else if (diffDays <= 4) return " due-soon";
+  else return "";
 }
 function filterTasksByUser(tasks) {
   const currentUser = localStorage.getItem("currentUser");
@@ -203,10 +184,6 @@ function renderAllTasks() {
   renderTodos();
   renderBirthdays();
 }
-
-//////////////////////////////////////////////////
-// Date Parsing Helpers
-//////////////////////////////////////////////////
 function formatDateForInput(timestamp) {
   const d = new Date(timestamp);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -452,6 +429,7 @@ async function renderContactTasks() {
     const dueClass = getDueClass(task.nextDue);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
+    // For contact tasks, display contactName
     taskDiv.innerHTML = `
       <span><strong>${task.contactName}</strong> (Every ${task.frequency} days)</span>
       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
@@ -732,7 +710,6 @@ function editBirthday(docId, task) {
 // Helper: Compute Next Occurrence for Birthdays
 //////////////////////////////////////////////////
 function getNextOccurrence(dateInput) {
-  // dateInput is a timestamp (ms) or a date string; we convert to Date
   const inputDate = new Date(dateInput);
   const month = inputDate.getMonth();
   const day = inputDate.getDate();
@@ -749,86 +726,86 @@ function getNextOccurrence(dateInput) {
 // View All Functionality
 //////////////////////////////////////////////////
 async function renderViewAll() {
-  // Get tasks from all four collections concurrently
   let [repeating, contact, todos, birthdays] = await Promise.all([
     getRepeatingTasks(),
     getContactTasks(),
     getTodos(),
     getBirthdays()
   ]);
-
-  // For repeating and contact tasks, compute nextDue
+  // For repeating and contact tasks, compute nextDue and normalize display name.
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
+    task.displayName = task.name;
   });
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
+    // Use contactName if available; otherwise fall back to name.
+    task.displayName = task.contactName || task.name;
   });
-  // Combine all tasks (each task already has its type property)
+  todos.forEach(task => {
+    task.displayName = task.name;
+  });
+  birthdays.forEach(task => {
+    task.displayName = task.name;
+  });
   let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
-  // Sort by due date (use nextDue if available, otherwise dueDate)
   allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
-
   const container = document.getElementById("all-tasks-view");
   container.innerHTML = "";
+  // Clear global task cache.
+  window.taskCache = {};
   allTasks.forEach(task => {
+    window.taskCache[task.docId] = task;
     let categoryLabel = "";
-    switch(task.type) {
-      case "repeating":
-        categoryLabel = "Repeating";
-        break;
-      case "contact":
-        categoryLabel = "Keep in Touch";
-        break;
-      case "todo":
-        categoryLabel = "One-off Todo";
-        break;
-      case "birthday":
-        categoryLabel = "Birthday/Occasion";
-        break;
-      default:
-        categoryLabel = "Unknown";
-    }
-    // Build action buttons depending on category.
-    let actionsHtml = "";
     if (task.type === "repeating") {
-      actionsHtml = `
-        <button class="complete-btn" onclick="markRepeatingTaskCompleted('${task.docId}', this.taskData)">Completed Today</button>
-        <button class="edit-btn" onclick="editRepeatingTask('${task.docId}', this.taskData)">Edit</button>
-        <button class="delete-btn" onclick="deleteRepeatingTask('${task.docId}')">Delete</button>`;
+      categoryLabel = "Repeating";
     } else if (task.type === "contact") {
-      actionsHtml = `
-        <button class="complete-btn" onclick="markContactTask('${task.docId}', this.taskData)">Completed Today</button>
-        <button class="edit-btn" onclick="editContactTask('${task.docId}', this.taskData)">Edit</button>
-        <button class="delete-btn" onclick="deleteContactTask('${task.docId}')">Delete</button>`;
+      categoryLabel = "Keep in Touch";
     } else if (task.type === "todo") {
-      actionsHtml = `
-        <button class="complete-btn" onclick="markTodoCompleted('${task.docId}', this.taskData)">Mark Completed</button>
-        <button class="edit-btn" onclick="editTodo('${task.docId}', this.taskData)">Edit</button>
-        <button class="delete-btn" onclick="deleteTodo('${task.docId}')">Delete</button>`;
+      categoryLabel = "One-off Todo";
     } else if (task.type === "birthday") {
-      actionsHtml = `
-        <button class="complete-btn" onclick="markBirthdayCompleted('${task.docId}', this.taskData)">Completed</button>
-        <button class="edit-btn" onclick="editBirthday('${task.docId}', this.taskData)">Edit</button>
-        <button class="delete-btn" onclick="deleteBirthday('${task.docId}')">Delete</button>`;
+      categoryLabel = "Birthday/Occasion";
+    } else {
+      categoryLabel = "Unknown";
     }
-    // Create a container for this task.
     const div = document.createElement("div");
     div.className = "task-item";
-    // Attach task data to the element for use in inline handlers.
-    div.taskData = task;
     div.innerHTML = `
-      <span><strong>${task.name}</strong> [${categoryLabel}]</span>
+      <span><strong>${task.displayName}</strong> [${categoryLabel}]</span>
       <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()}</small>
       <br>
       <small>Owner: ${task.owner}</small>
       <div class="streak-visual">${(task.streak !== undefined) ? getStreakVisual(task.streak) : ""}</div>
-      <div class="task-actions">${actionsHtml}</div>
+      <div class="task-actions">
+        ${getViewAllActions(task)}
+      </div>
     `;
     container.appendChild(div);
   });
 }
 
-//////////////////////////////////////////////////
-// End of Code
-//////////////////////////////////////////////////
+function getViewAllActions(task) {
+  if (task.type === "repeating") {
+    return `
+      <button class="complete-btn" onclick="markRepeatingTaskCompleted('${task.docId}', window.taskCache['${task.docId}'])">Completed Today</button>
+      <button class="edit-btn" onclick="editRepeatingTask('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
+      <button class="delete-btn" onclick="deleteRepeatingTask('${task.docId}')">Delete</button>`;
+  } else if (task.type === "contact") {
+    return `
+      <button class="complete-btn" onclick="markContactTask('${task.docId}', window.taskCache['${task.docId}'])">Completed Today</button>
+      <button class="edit-btn" onclick="editContactTask('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
+      <button class="delete-btn" onclick="deleteContactTask('${task.docId}')">Delete</button>`;
+  } else if (task.type === "todo") {
+    return `
+      <button class="complete-btn" onclick="markTodoCompleted('${task.docId}', window.taskCache['${task.docId}'])">Mark Completed</button>
+      <button class="edit-btn" onclick="editTodo('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
+      <button class="delete-btn" onclick="deleteTodo('${task.docId}')">Delete</button>`;
+  } else if (task.type === "birthday") {
+    return `
+      <button class="complete-btn" onclick="markBirthdayCompleted('${task.docId}', window.taskCache['${task.docId}'])">Completed</button>
+      <button class="edit-btn" onclick="editBirthday('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
+      <button class="delete-btn" onclick="deleteBirthday('${task.docId}')">Delete</button>`;
+  } else {
+    return "";
+  }
+}
