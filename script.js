@@ -5,6 +5,7 @@ import {
   collection, 
   getDocs, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   doc 
@@ -124,108 +125,117 @@ async function isBirthdayCleanForUser(user) {
   return tasks.every(task => task.dueDate >= todayMidnight);
 }
 
-// === UPDATE SCOREBOARD (Including Overall and Category-Specific) ===
+// === UPDATE SCOREBOARD (Stored in Firestore) ===
 async function updateScoreboard() {
-  const users = JSON.parse(localStorage.getItem("users"));
-  let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
+  const users = JSON.parse(localStorage.getItem("users")); // or however you maintain the users list
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().split("T")[0];
 
+  let scoreboardObj = {};
+
   for (const user of users) {
-    if (!scoreboard[user]) {
-      scoreboard[user] = {
-        overallCleanDays: 0,
-        overallStreak: 0,
-        lastOverallUpdate: "",
-        repeatingStreak: 0, lastRepeatingUpdate: "",
-        contactStreak: 0,   lastContactUpdate: "",
-        todoStreak: 0,      lastTodoUpdate: "",
-        birthdayStreak: 0,  lastBirthdayUpdate: ""
-      };
+    const docRef = doc(db, "scoreboards", user);
+    let userScoreboard = {};
+    try {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        userScoreboard = docSnap.data();
+      }
+    } catch (err) {
+      console.error(err);
     }
-    // ---- Overall Clean Day Streak ----
-    if (scoreboard[user].lastOverallUpdate !== todayStr) {
+    // Initialize missing fields
+    userScoreboard.overallCleanDays = userScoreboard.overallCleanDays || 0;
+    userScoreboard.overallStreak = userScoreboard.overallStreak || 0;
+    userScoreboard.lastOverallUpdate = userScoreboard.lastOverallUpdate || "";
+    userScoreboard.repeatingStreak = userScoreboard.repeatingStreak || 0;
+    userScoreboard.lastRepeatingUpdate = userScoreboard.lastRepeatingUpdate || "";
+    userScoreboard.contactStreak = userScoreboard.contactStreak || 0;
+    userScoreboard.lastContactUpdate = userScoreboard.lastContactUpdate || "";
+    userScoreboard.todoStreak = userScoreboard.todoStreak || 0;
+    userScoreboard.lastTodoUpdate = userScoreboard.lastTodoUpdate || "";
+    userScoreboard.birthdayStreak = userScoreboard.birthdayStreak || 0;
+    userScoreboard.lastBirthdayUpdate = userScoreboard.lastBirthdayUpdate || "";
+
+    // Overall Clean Day/Streak
+    if (userScoreboard.lastOverallUpdate !== todayStr) {
       let overallClean = await isCleanDayForUser(user);
       if (overallClean) {
-        scoreboard[user].overallCleanDays += 1;
-        scoreboard[user].overallStreak = (scoreboard[user].lastOverallUpdate === yesterdayStr)
-          ? scoreboard[user].overallStreak + 1
+        userScoreboard.overallCleanDays += 1;
+        userScoreboard.overallStreak = (userScoreboard.lastOverallUpdate === yesterdayStr)
+          ? userScoreboard.overallStreak + 1
           : 1;
       } else {
-        scoreboard[user].overallStreak = 0;
+        userScoreboard.overallStreak = 0;
       }
-      scoreboard[user].lastOverallUpdate = todayStr;
+      userScoreboard.lastOverallUpdate = todayStr;
     }
-    // ---- Repeating Tasks Streak ----
-    if (scoreboard[user].lastRepeatingUpdate !== todayStr) {
+    // Repeating Tasks
+    if (userScoreboard.lastRepeatingUpdate !== todayStr) {
       let clean = await isRepeatingCleanForUser(user);
-      scoreboard[user].repeatingStreak = clean
-        ? (scoreboard[user].lastRepeatingUpdate === yesterdayStr ? scoreboard[user].repeatingStreak + 1 : 1)
+      userScoreboard.repeatingStreak = clean
+        ? (userScoreboard.lastRepeatingUpdate === yesterdayStr ? userScoreboard.repeatingStreak + 1 : 1)
         : 0;
-      scoreboard[user].lastRepeatingUpdate = todayStr;
+      userScoreboard.lastRepeatingUpdate = todayStr;
     }
-    // ---- Keep in Touch Streak ----
-    if (scoreboard[user].lastContactUpdate !== todayStr) {
+    // Keep in Touch
+    if (userScoreboard.lastContactUpdate !== todayStr) {
       let clean = await isContactCleanForUser(user);
-      scoreboard[user].contactStreak = clean
-        ? (scoreboard[user].lastContactUpdate === yesterdayStr ? scoreboard[user].contactStreak + 1 : 1)
+      userScoreboard.contactStreak = clean
+        ? (userScoreboard.lastContactUpdate === yesterdayStr ? userScoreboard.contactStreak + 1 : 1)
         : 0;
-      scoreboard[user].lastContactUpdate = todayStr;
+      userScoreboard.lastContactUpdate = todayStr;
     }
-    // ---- One-off Todos Streak ----
-    if (scoreboard[user].lastTodoUpdate !== todayStr) {
+    // One-off Todos
+    if (userScoreboard.lastTodoUpdate !== todayStr) {
       let clean = await isTodoCleanForUser(user);
-      scoreboard[user].todoStreak = clean
-        ? (scoreboard[user].lastTodoUpdate === yesterdayStr ? scoreboard[user].todoStreak + 1 : 1)
+      userScoreboard.todoStreak = clean
+        ? (userScoreboard.lastTodoUpdate === yesterdayStr ? userScoreboard.todoStreak + 1 : 1)
         : 0;
-      scoreboard[user].lastTodoUpdate = todayStr;
+      userScoreboard.lastTodoUpdate = todayStr;
     }
-    // ---- Birthdays Occasions Streak ----
-    if (scoreboard[user].lastBirthdayUpdate !== todayStr) {
+    // Birthdays Occasions
+    if (userScoreboard.lastBirthdayUpdate !== todayStr) {
       let clean = await isBirthdayCleanForUser(user);
-      scoreboard[user].birthdayStreak = clean
-        ? (scoreboard[user].lastBirthdayUpdate === yesterdayStr ? scoreboard[user].birthdayStreak + 1 : 1)
+      userScoreboard.birthdayStreak = clean
+        ? (userScoreboard.lastBirthdayUpdate === yesterdayStr ? userScoreboard.birthdayStreak + 1 : 1)
         : 0;
-      scoreboard[user].lastBirthdayUpdate = todayStr;
+      userScoreboard.lastBirthdayUpdate = todayStr;
     }
+
+    scoreboardObj[user] = userScoreboard;
+    // Update Firestore (merge to preserve any additional fields)
+    await setDoc(docRef, userScoreboard, { merge: true });
   }
-  
-  localStorage.setItem("scoreboard", JSON.stringify(scoreboard));
-  displayScoreboard(scoreboard);
+  displayScoreboard(scoreboardObj);
 }
 
-// === DISPLAY SCOREBOARD (Overall Rows + Category Rows) ===
+// === DISPLAY SCOREBOARD (Overall + Category Rows) ===
 function displayScoreboard(scoreboard) {
   const scoreboardEl = document.getElementById("scoreboard");
   if (!scoreboardEl) return;
-  
+
   let overallRows = "";
   const users = JSON.parse(localStorage.getItem("users"));
-  
-  // Build overall rows
-  overallRows += "Overall Clean Days:";
-  overallRows += "<br>";
+  overallRows += "Overall Clean Days:<br>";
   for (const user of users) {
     const data = scoreboard[user] || {};
     overallRows += `<strong>${user}:</strong> ${data.overallCleanDays || 0}<br>`;
   }
-  
-  overallRows += "<br>Overall Streak:";
-  overallRows += "<br>";
+  overallRows += "<br>Overall Streak:<br>";
   for (const user of users) {
     const data = scoreboard[user] || {};
     overallRows += `<strong>${user}:</strong> ${getStreakVisualForScore(data.overallStreak || 0, 100)} (${data.overallStreak || 0} days)<br>`;
   }
-  
-  // Build category rows
+
   let repeatingRow = "Repeating Tasks:<br>";
-  let contactRow = "Keep in Touch:<br>";
-  let todoRow = "One-off Todos:<br>";
-  let birthdayRow = "Birthdays Occasions:<br>";
-  
+  let contactRow   = "Keep in Touch:<br>";
+  let todoRow      = "One-off Todos:<br>";
+  let birthdayRow  = "Birthdays Occasions:<br>";
+
   for (const user of users) {
     const data = scoreboard[user] || {};
     repeatingRow += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
@@ -233,7 +243,6 @@ function displayScoreboard(scoreboard) {
     todoRow      += `<strong>${user}:</strong> ${getStreakVisualForScore(data.todoStreak || 0, 100)}<br>`;
     birthdayRow  += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
   }
-  
   scoreboardEl.innerHTML = overallRows + "<br><br>" + repeatingRow + "<br>" + contactRow + "<br>" + todoRow + "<br>" + birthdayRow;
 }
 
