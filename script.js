@@ -5,6 +5,7 @@ import {
   collection, 
   getDocs, 
   addDoc, 
+  getDoc,
   setDoc,
   updateDoc, 
   deleteDoc, 
@@ -88,6 +89,36 @@ document.addEventListener("DOMContentLoaded", () => {
 // ===== SCOREBOARD FUNCTIONS =====
 
 /// === CATEGORY CLEAN CHECK FUNCTIONS ===
+async function isCleanDayForUser(user) {
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  
+  // Retrieve individual tasks for this user.
+  let repeating = (await getRepeatingTasks()).filter(task => task.owner === user);
+  let contact   = (await getContactTasks()).filter(task => task.owner === user);
+  let todos     = (await getTodos()).filter(task => task.owner === user);
+  let birthdays = (await getBirthdays()).filter(task => task.owner === user);
+  
+  // For repeating and contact tasks, compute nextDue.
+  repeating.forEach(task => {
+    task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  contact.forEach(task => {
+    task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  
+  // Check for overdue tasks:
+  // - For repeating/contact: overdue if nextDue is before today's midnight.
+  // - For todos: if not completed and dueDate is before today's midnight.
+  // - For birthdays: if dueDate is before today's midnight.
+  if (repeating.some(task => task.nextDue < todayMidnight)) return false;
+  if (contact.some(task => task.nextDue < todayMidnight)) return false;
+  if (todos.some(task => !task.completed && task.dueDate < todayMidnight)) return false;
+  if (birthdays.some(task => task.dueDate < todayMidnight)) return false;
+  
+  return true;
+}
+
 async function isRepeatingCleanForUser(user) {
   let tasks = (await getRepeatingTasks()).filter(task => task.owner === user);
   let today = new Date();
