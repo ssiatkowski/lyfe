@@ -216,3 +216,9 @@ h1, h2 {
   display: none;
   margin-top: 20px;
 }
+/* Media Queries for Mobile Devices */
+@media (max-width: 768px) {
+  #nav-bar button {
+    font-size: 0.8em;
+  }
+}
