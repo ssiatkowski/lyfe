@@ -147,13 +147,6 @@ function updateOwnerDropdowns() {
     }
   });
 }
-function addUser(newUser) {
-  let users = JSON.parse(localStorage.getItem("users"));
-  if (!users.includes(newUser)) {
-    users.push(newUser);
-    localStorage.setItem("users", JSON.stringify(users));
-  }
-}
 
 //////////////////////////////////////////////////
 // Utility Functions
@@ -630,12 +623,12 @@ async function addBirthday() {
   const owner = document.getElementById("b-owner").value;
   const name = document.getElementById("b-task-name").value;
   const dateStr = document.getElementById("b-date").value;
+  // Store the birthday exactly as entered (do not adjust to next year)
   const dueDate = parseLocalDate(dateStr).getTime();
-  const nextOccurrence = getNextOccurrence(dueDate);
   const newTask = {
     owner,
     name,
-    dueDate: nextOccurrence,
+    dueDate, // use the entered date directly
     completed: false,
     created: Date.now(),
     type: "birthday"
@@ -701,7 +694,8 @@ async function deleteBirthday(docId) {
 }
 function editBirthday(docId, task) {
   showEditModal(task, "birthday", async function(newDate) {
-    let newDue = getNextOccurrence(newDate);
+    // Update with the entered date without adjusting to next year
+    let newDue = parseLocalDate(newDate).getTime();
     task.dueDate = newDue;
     await updateDoc(doc(db, "birthdays", docId), task);
     renderBirthdays();
@@ -781,8 +775,11 @@ async function renderViewAll() {
     } else {
       categoryLabel = "Unknown";
     }
+    // Apply color scheme: compute the due class (e.g., " overdue", " due-today", etc.)
+    const dueClass = getDueClass(task.nextDue || task.dueDate);
+    
     const div = document.createElement("div");
-    div.className = "task-item";
+    div.className = "task-item" + dueClass;
     div.innerHTML = `
       <span><strong>${task.displayName}</strong> [${categoryLabel}]</span>
       <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()} | Owner: ${task.owner}</small>
