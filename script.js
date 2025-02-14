@@ -124,8 +124,120 @@ async function isBirthdayCleanForUser(user) {
   return tasks.every(task => task.dueDate >= todayMidnight);
 }
 
-// === STREAK VISUAL HELPER ===
-// Displays streak as stars/checkmarks. For repeating/contact/todo, cap at 100; for birthdays, cap at 1000.
+// === UPDATE SCOREBOARD (Including Overall and Category-Specific) ===
+async function updateScoreboard() {
+  const users = JSON.parse(localStorage.getItem("users"));
+  let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  for (const user of users) {
+    if (!scoreboard[user]) {
+      scoreboard[user] = {
+        overallCleanDays: 0,
+        overallStreak: 0,
+        lastOverallUpdate: "",
+        repeatingStreak: 0, lastRepeatingUpdate: "",
+        contactStreak: 0,   lastContactUpdate: "",
+        todoStreak: 0,      lastTodoUpdate: "",
+        birthdayStreak: 0,  lastBirthdayUpdate: ""
+      };
+    }
+    // ---- Overall Clean Day Streak ----
+    if (scoreboard[user].lastOverallUpdate !== todayStr) {
+      let overallClean = await isCleanDayForUser(user);
+      if (overallClean) {
+        scoreboard[user].overallCleanDays += 1;
+        scoreboard[user].overallStreak = (scoreboard[user].lastOverallUpdate === yesterdayStr)
+          ? scoreboard[user].overallStreak + 1
+          : 1;
+      } else {
+        scoreboard[user].overallStreak = 0;
+      }
+      scoreboard[user].lastOverallUpdate = todayStr;
+    }
+    // ---- Repeating Tasks Streak ----
+    if (scoreboard[user].lastRepeatingUpdate !== todayStr) {
+      let clean = await isRepeatingCleanForUser(user);
+      scoreboard[user].repeatingStreak = clean
+        ? (scoreboard[user].lastRepeatingUpdate === yesterdayStr ? scoreboard[user].repeatingStreak + 1 : 1)
+        : 0;
+      scoreboard[user].lastRepeatingUpdate = todayStr;
+    }
+    // ---- Keep in Touch Streak ----
+    if (scoreboard[user].lastContactUpdate !== todayStr) {
+      let clean = await isContactCleanForUser(user);
+      scoreboard[user].contactStreak = clean
+        ? (scoreboard[user].lastContactUpdate === yesterdayStr ? scoreboard[user].contactStreak + 1 : 1)
+        : 0;
+      scoreboard[user].lastContactUpdate = todayStr;
+    }
+    // ---- One-off Todos Streak ----
+    if (scoreboard[user].lastTodoUpdate !== todayStr) {
+      let clean = await isTodoCleanForUser(user);
+      scoreboard[user].todoStreak = clean
+        ? (scoreboard[user].lastTodoUpdate === yesterdayStr ? scoreboard[user].todoStreak + 1 : 1)
+        : 0;
+      scoreboard[user].lastTodoUpdate = todayStr;
+    }
+    // ---- Birthdays Occasions Streak ----
+    if (scoreboard[user].lastBirthdayUpdate !== todayStr) {
+      let clean = await isBirthdayCleanForUser(user);
+      scoreboard[user].birthdayStreak = clean
+        ? (scoreboard[user].lastBirthdayUpdate === yesterdayStr ? scoreboard[user].birthdayStreak + 1 : 1)
+        : 0;
+      scoreboard[user].lastBirthdayUpdate = todayStr;
+    }
+  }
+  
+  localStorage.setItem("scoreboard", JSON.stringify(scoreboard));
+  displayScoreboard(scoreboard);
+}
+
+// === DISPLAY SCOREBOARD (Overall Rows + Category Rows) ===
+function displayScoreboard(scoreboard) {
+  const scoreboardEl = document.getElementById("scoreboard");
+  if (!scoreboardEl) return;
+  
+  let overallRows = "";
+  const users = JSON.parse(localStorage.getItem("users"));
+  
+  // Build overall rows
+  overallRows += "Overall Clean Days:";
+  overallRows += "<br>";
+  for (const user of users) {
+    const data = scoreboard[user] || {};
+    overallRows += `<strong>${user}:</strong> ${data.overallCleanDays || 0}<br>`;
+  }
+  
+  overallRows += "<br>Overall Streak:";
+  overallRows += "<br>";
+  for (const user of users) {
+    const data = scoreboard[user] || {};
+    overallRows += `<strong>${user}:</strong> ${getStreakVisualForScore(data.overallStreak || 0, 100)} (${data.overallStreak || 0} days)<br>`;
+  }
+  
+  // Build category rows
+  let repeatingRow = "Repeating Tasks:<br>";
+  let contactRow = "Keep in Touch:<br>";
+  let todoRow = "One-off Todos:<br>";
+  let birthdayRow = "Birthdays Occasions:<br>";
+  
+  for (const user of users) {
+    const data = scoreboard[user] || {};
+    repeatingRow += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
+    contactRow   += `<strong>${user}:</strong> ${getStreakVisualForScore(data.contactStreak || 0, 100)}<br>`;
+    todoRow      += `<strong>${user}:</strong> ${getStreakVisualForScore(data.todoStreak || 0, 100)}<br>`;
+    birthdayRow  += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
+  }
+  
+  scoreboardEl.innerHTML = overallRows + "<br><br>" + repeatingRow + "<br>" + contactRow + "<br>" + todoRow + "<br>" + birthdayRow;
+}
+
+// === STREAK VISUAL HELPER (for scoreboard) ===
 function getStreakVisualForScore(streak, cap) {
   const effective = Math.min(streak, cap);
   let stars = Math.floor(effective / 10);
@@ -143,86 +255,6 @@ function getStreakVisualForScore(streak, cap) {
     }
   }
   return visual;
-}
-
-// === UPDATE SCOREBOARD (CATEGORY-SPECIFIC) ===
-async function updateScoreboard() {
-  const users = JSON.parse(localStorage.getItem("users"));
-  let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
-  const today = new Date();
-  const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
-
-  // For each user, update a streak for each category.
-  for (const user of users) {
-    if (!scoreboard[user]) {
-      scoreboard[user] = {
-        repeatingStreak: 0, lastRepeatingUpdate: "",
-        contactStreak: 0,   lastContactUpdate: "",
-        todoStreak: 0,      lastTodoUpdate: "",
-        birthdayStreak: 0,  lastBirthdayUpdate: ""
-      };
-    }
-    // Repeating Tasks
-    if (scoreboard[user].lastRepeatingUpdate !== todayStr) {
-      let clean = await isRepeatingCleanForUser(user);
-      scoreboard[user].repeatingStreak = clean
-        ? (scoreboard[user].lastRepeatingUpdate === yesterdayStr ? scoreboard[user].repeatingStreak + 1 : 1)
-        : 0;
-      scoreboard[user].lastRepeatingUpdate = todayStr;
-    }
-    // Keep in Touch
-    if (scoreboard[user].lastContactUpdate !== todayStr) {
-      let clean = await isContactCleanForUser(user);
-      scoreboard[user].contactStreak = clean
-        ? (scoreboard[user].lastContactUpdate === yesterdayStr ? scoreboard[user].contactStreak + 1 : 1)
-        : 0;
-      scoreboard[user].lastContactUpdate = todayStr;
-    }
-    // One-off Todos
-    if (scoreboard[user].lastTodoUpdate !== todayStr) {
-      let clean = await isTodoCleanForUser(user);
-      scoreboard[user].todoStreak = clean
-        ? (scoreboard[user].lastTodoUpdate === yesterdayStr ? scoreboard[user].todoStreak + 1 : 1)
-        : 0;
-      scoreboard[user].lastTodoUpdate = todayStr;
-    }
-    // Birthdays Occasions
-    if (scoreboard[user].lastBirthdayUpdate !== todayStr) {
-      let clean = await isBirthdayCleanForUser(user);
-      scoreboard[user].birthdayStreak = clean
-        ? (scoreboard[user].lastBirthdayUpdate === yesterdayStr ? scoreboard[user].birthdayStreak + 1 : 1)
-        : 0;
-      scoreboard[user].lastBirthdayUpdate = todayStr;
-    }
-  }
-  localStorage.setItem("scoreboard", JSON.stringify(scoreboard));
-  displayScoreboard(scoreboard);
-}
-
-// === DISPLAY SCOREBOARD (ROWS by Category) ===
-function displayScoreboard(scoreboard) {
-  const scoreboardEl = document.getElementById("scoreboard");
-  if (!scoreboardEl) return;
-  
-  // Build one row per category.
-  let repeatingRow = "Repeating Tasks:<br>";
-  let contactRow = "Keep in Touch:<br>";
-  let todoRow = "One-off Todos:<br>";
-  let birthdayRow = "Birthdays Occasions:<br>";
-  
-  const users = JSON.parse(localStorage.getItem("users"));
-  for (const user of users) {
-    const data = scoreboard[user] || {};
-    repeatingRow += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
-    contactRow   += `<strong>${user}:</strong> ${getStreakVisualForScore(data.contactStreak || 0, 100)}<br>`;
-    todoRow      += `<strong>${user}:</strong> ${getStreakVisualForScore(data.todoStreak || 0, 100)}<br>`;
-    birthdayRow  += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
-  }
-  
-  scoreboardEl.innerHTML = repeatingRow + "<br>" + contactRow + "<br>" + todoRow + "<br>" + birthdayRow;
 }
 
 
