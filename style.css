@@ -220,5 +220,6 @@ h1, h2 {
 @media (max-width: 768px) {
   #nav-bar button {
     font-size: 0.8em;
+    padding: 5px 15px;
   }
 }

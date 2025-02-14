@@ -741,22 +741,26 @@ async function renderViewAll() {
   todos = filterTasksByUser(todos);
   birthdays = filterTasksByUser(birthdays);
 
-  // For repeating and contact tasks, compute nextDue and set display names.
+  // For repeating and contact tasks, compute nextDue, set display names, and assign type.
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
     task.displayName = task.name || "No Name";
+    task.type = "repeating"; // assign type manually
   });
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
-    // Use the "name" field (now set in addContactTask) for display.
     task.displayName = task.name || task.contactName || "No Name";
+    task.type = "contact"; // assign type manually
   });
   todos.forEach(task => {
     task.displayName = task.name || "No Name";
+    task.type = "todo"; // assign type manually
   });
   birthdays.forEach(task => {
     task.displayName = task.name || "No Name";
+    task.type = "birthday"; // assign type manually
   });
+
   let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
   allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
   const container = document.getElementById("all-tasks-view");
