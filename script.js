@@ -255,7 +255,7 @@ function displayScoreboard(scoreboard) {
   
   const users = JSON.parse(localStorage.getItem("users"));
   
-  // Build content for overall metrics
+  // Build content for each cell:
   let overallCleanHTML = "Overall Clean Days:<br>";
   users.forEach(user => {
     let data = scoreboard[user] || {};
@@ -268,7 +268,6 @@ function displayScoreboard(scoreboard) {
     overallStreakHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.overallStreak || 0, 100)}<br>`;
   });
   
-  // Build content for each category
   let requestingHTML = "Requesting Tasks:<br>";
   users.forEach(user => {
     let data = scoreboard[user] || {};
@@ -293,22 +292,17 @@ function displayScoreboard(scoreboard) {
     birthdayHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
   });
   
-  // Output a semantic structure; we’ll use CSS Grid to arrange this
+  // Output a simple markup structure with 6 cells.
   scoreboardEl.innerHTML = `
-    <div class="scoreboard-row overall-row">
-      <div class="empty-cell"></div>
-      <div class="overall-clean cell">${overallCleanHTML}</div>
-      <div class="overall-streak cell">${overallStreakHTML}</div>
-      <div class="empty-cell"></div>
-    </div>
-    <div class="scoreboard-row category-row">
-      <div class="category-cell cell">${requestingHTML}</div>
-      <div class="category-cell cell">${contactHTML}</div>
-      <div class="category-cell cell">${todoHTML}</div>
-      <div class="category-cell cell">${birthdayHTML}</div>
-    </div>
+    <div class="cell overall-clean">${overallCleanHTML}</div>
+    <div class="cell overall-streak">${overallStreakHTML}</div>
+    <div class="cell requesting">${requestingHTML}</div>
+    <div class="cell contact">${contactHTML}</div>
+    <div class="cell todo">${todoHTML}</div>
+    <div class="cell birthday">${birthdayHTML}</div>
   `;
 }
+
 
 
 // === STREAK VISUAL HELPER (for scoreboard) ===

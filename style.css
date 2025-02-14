@@ -218,32 +218,22 @@ h1, h2 {
 }
 
 #scoreboard {
-  background: #f7f7f7;
-  border: 1px solid #ccc;
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* two equal columns */
+  grid-gap: 10px;
   margin: 20px auto;
   width: fit-content;
-  font-family: Arial, sans-serif;
-  /* Remove padding/text-align if grid styling handles it */
-}
-
-.scoreboard-row {
-  display: grid;
-  grid-template-columns: repeat(4, auto);
   text-align: center;
+  background: #f7f7f7;
   border: 1px solid #ccc;
   padding: 10px;
+  font-family: Arial, sans-serif;
 }
 
 .cell {
+  border: 1px solid #ddd;
   padding: 10px;
 }
-
-/* Optionally style empty cells (for the first row) */
-.overall-row .empty-cell {
-  /* e.g., set a fixed width, or leave blank */
-  min-width: 50px;
-}
-
 
 /* Media Queries for Mobile Devices */
 @media (max-width: 768px) {
