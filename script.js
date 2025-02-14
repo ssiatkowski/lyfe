@@ -349,6 +349,16 @@ async function renderRepeatingTasks() {
     list.appendChild(taskDiv);
   });
 }
+// Helper function to re-render the current view
+function refreshView() {
+  const viewAllEl = document.getElementById("all-tasks-view");
+  if (viewAllEl.style.display !== "none") {
+    renderViewAll();
+  } else {
+    renderAllTasks();
+  }
+}
+// Repeating Tasks
 async function markRepeatingTaskCompleted(docId, task) {
   let now = Date.now();
   const prevDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
@@ -360,11 +370,11 @@ async function markRepeatingTaskCompleted(docId, task) {
   }
   task.lastCompleted = now;
   await updateDoc(doc(db, "repeatingTasks", docId), task);
-  renderRepeatingTasks();
+  refreshView(); // update view after completion
 }
 async function deleteRepeatingTask(docId) {
   await deleteDoc(doc(db, "repeatingTasks", docId));
-  renderRepeatingTasks();
+  refreshView(); // update view after deletion
 }
 function editRepeatingTask(docId, task) {
   showEditModal(task, "repeating", async function(newDate, newFreq) {
@@ -462,6 +472,7 @@ async function renderContactTasks() {
     list.appendChild(taskDiv);
   });
 }
+// Keep in Touch Tasks
 async function markContactTask(docId, task) {
   let now = Date.now();
   const prevDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
@@ -473,11 +484,12 @@ async function markContactTask(docId, task) {
   }
   task.lastContact = now;
   await updateDoc(doc(db, "contactTasks", docId), task);
-  renderContactTasks();
+  refreshView();
 }
+
 async function deleteContactTask(docId) {
   await deleteDoc(doc(db, "contactTasks", docId));
-  renderContactTasks();
+  refreshView();
 }
 function editContactTask(docId, task) {
   showEditModal(task, "contact", async function(newDate, newFreq) {
@@ -593,11 +605,12 @@ async function renderTodos() {
 }
 async function markTodoCompleted(docId, task) {
   await updateDoc(doc(db, "todos", docId), { completed: true });
-  renderTodos();
+  refreshView();
 }
+
 async function deleteTodo(docId) {
   await deleteDoc(doc(db, "todos", docId));
-  renderTodos();
+  refreshView();
 }
 function editTodo(docId, task) {
   showEditModal(task, "todo", async function(newDate) {
@@ -691,11 +704,12 @@ async function markBirthdayCompleted(docId, task) {
   const newDue = new Date(nextYear, dueDate.getMonth(), dueDate.getDate()).getTime();
   task.dueDate = newDue;
   await updateDoc(doc(db, "birthdays", docId), task);
-  renderBirthdays();
+  refreshView();
 }
+
 async function deleteBirthday(docId) {
   await deleteDoc(doc(db, "birthdays", docId));
-  renderBirthdays();
+  refreshView();
 }
 function editBirthday(docId, task) {
   showEditModal(task, "birthday", async function(newDate) {
