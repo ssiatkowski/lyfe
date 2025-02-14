@@ -218,27 +218,30 @@ h1, h2 {
 }
 
 #scoreboard {
-  padding: 1em;
   background: #f7f7f7;
   border: 1px solid #ccc;
-  margin: 20px auto;    /* centers the container horizontally */
-  width: fit-content;   /* shrink-to-fit the content */
-  text-align: center;   /* center text inside */
+  margin: 20px auto;
+  width: fit-content;
   font-family: Arial, sans-serif;
+  /* Remove padding/text-align if grid styling handles it */
 }
 
-.scoreboard-user {
-  margin-bottom: 0.75em;
-  padding: 0.5em;
-  border-bottom: 1px solid #ddd;
+.scoreboard-row {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  text-align: center;
+  border: 1px solid #ccc;
+  padding: 10px;
 }
 
-.scoreboard-user strong {
-  font-size: 1.1em;
+.cell {
+  padding: 10px;
 }
 
-.scoreboard-user br {
-  margin-bottom: 0.25em;
+/* Optionally style empty cells (for the first row) */
+.overall-row .empty-cell {
+  /* e.g., set a fixed width, or leave blank */
+  min-width: 50px;
 }
 
 
