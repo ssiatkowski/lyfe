@@ -40,8 +40,13 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("user-select").value = localStorage.getItem("currentUser");
   document.getElementById("user-select").addEventListener("change", function() {
     localStorage.setItem("currentUser", this.value);
-    renderAllTasks();
     updateOwnerDropdowns();
+    // If the View All container is visible, re-render it; otherwise, re-render all tasks
+    if (document.getElementById("all-tasks-view").style.display !== "none") {
+      renderViewAll();
+    } else {
+      renderAllTasks();
+    }
   });
 
   // Navigation Bar Handlers (including View All)
@@ -426,7 +431,7 @@ async function renderContactTasks() {
     taskDiv.className = "task-item" + dueClass;
     // For contact tasks, display the name stored in "name"
     taskDiv.innerHTML = `
-      <span><strong>${task.name}</strong> (Every ${task.frequency} days)</span>
+      <span><strong>${task.contactName}</strong> (Every ${task.frequency} days)</span>
       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
       <div class="streak-visual">${getStreakVisual(task.streak)}</div>
       <small>Owner: ${task.owner}</small>`;
@@ -732,7 +737,7 @@ async function renderViewAll() {
   // Filter tasks by current user (or "All")
   repeating = filterTasksByUser(repeating);
   contact = filterTasksByUser(contact);
-  todos = filterTasksByUser(todos);
+  todos = filterTasksByUser(todos).filter(todo => !todo.completed);
   birthdays = filterTasksByUser(birthdays);
 
   // For repeating and contact tasks, compute nextDue, set display names, and assign type.
@@ -743,7 +748,7 @@ async function renderViewAll() {
   });
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
-    task.displayName = task.name || task.contactName || "No Name";
+    task.displayName = task.contactName || task.contactName || "No Name";
     task.type = "contact"; // assign type manually
   });
   todos.forEach(task => {
