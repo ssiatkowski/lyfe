@@ -29,7 +29,7 @@ const db = getFirestore(app);
 // DOM Ready
 //////////////////////////////////////////////////
 document.addEventListener("DOMContentLoaded", function () {
-  // --- Initialize Users & Current User (default to Alomi) ---
+  // Initialize Users & Current User (default to Alomi)
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
     updateOwnerDropdowns();
   });
 
-  // --- Navigation Bar Handlers ---
+  // Navigation Bar Handlers (including new "View All" tab)
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function () {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // --- Form Handlers ---
+  // Form Handlers
   document.getElementById("repeating-form").addEventListener("submit", async function (e) {
     e.preventDefault();
     await addRepeatingTask();
@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", function () {
     await addBirthday();
   });
 
-  // --- Initial Render ---
+  // Initial Render: start with standard columns
   renderAllTasks();
   setInterval(renderAllTasks, 60000);
 });
@@ -84,14 +84,13 @@ document.addEventListener("DOMContentLoaded", function () {
 function reorderColumns(selectedType) {
   const columnsContainer = document.getElementById("columns-container");
   const allView = document.getElementById("all-tasks-view");
-  if(selectedType === "all") {
+  if (selectedType === "all") {
     columnsContainer.style.display = "none";
     allView.style.display = "block";
     renderViewAll();
   } else {
     columnsContainer.style.display = "flex";
     allView.style.display = "none";
-    // Rearrange the columns according to selection:
     const repeating = document.getElementById("repeating-column");
     const contacts = document.getElementById("contacts-column");
     const todos = document.getElementById("todos-column");
@@ -269,11 +268,11 @@ function showEditModal(task, type, callback) {
     fieldsDiv.appendChild(createField("Last Completed Date:", "date", formatDateForInput(task.lastCompleted), "edit-date"));
     fieldsDiv.appendChild(createField("Frequency (days):", "number", task.frequency, "edit-frequency"));
   } else if (type === "contact") {
-    titleEl.textContent = "Edit Keep In Touch Task";
+    titleEl.textContent = "Edit Keep in Touch Task";
     fieldsDiv.appendChild(createField("Last Contact Date:", "date", formatDateForInput(task.lastContact), "edit-date"));
     fieldsDiv.appendChild(createField("Frequency (days):", "number", task.frequency, "edit-frequency"));
   } else if (type === "todo") {
-    titleEl.textContent = "Edit One-off Task";
+    titleEl.textContent = "Edit One-off Todo";
     fieldsDiv.appendChild(createField("Due Date:", "date", formatDateForInput(task.dueDate), "edit-date"));
   } else if (type === "birthday") {
     titleEl.textContent = "Edit Birthday/Occasion";
@@ -323,6 +322,7 @@ async function addRepeatingTask() {
     frequency,
     lastCompleted: todayMidnight,
     streak: 0,
+    type: "repeating"
   };
   await addDoc(collection(db, "repeatingTasks"), newTask);
   document.getElementById("repeating-form").reset();
@@ -432,6 +432,7 @@ async function addContactTask() {
     frequency,
     lastContact: todayMidnight,
     streak: 0,
+    type: "contact"
   };
   await addDoc(collection(db, "contactTasks"), newTask);
   document.getElementById("contacts-form").reset();
@@ -540,6 +541,7 @@ async function addTodo() {
     dueDate,
     completed: false,
     created: Date.now(),
+    type: "todo"
   };
   await addDoc(collection(db, "todos"), newTodo);
   document.getElementById("todos-form").reset();
@@ -656,6 +658,7 @@ async function addBirthday() {
     dueDate: nextOccurrence,
     completed: false,
     created: Date.now(),
+    type: "birthday"
   };
   await addDoc(collection(db, "birthdays"), newTask);
   document.getElementById("birthdays-form").reset();
@@ -729,7 +732,7 @@ function editBirthday(docId, task) {
 // Helper: Compute Next Occurrence for Birthdays
 //////////////////////////////////////////////////
 function getNextOccurrence(dateInput) {
-  // dateInput is a timestamp (in ms) from the input date
+  // dateInput is a timestamp (ms) or a date string; we convert to Date
   const inputDate = new Date(dateInput);
   const month = inputDate.getMonth();
   const day = inputDate.getDate();
@@ -753,6 +756,7 @@ async function renderViewAll() {
     getTodos(),
     getBirthdays()
   ]);
+
   // For repeating and contact tasks, compute nextDue
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
@@ -760,31 +764,67 @@ async function renderViewAll() {
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
   });
-  // For todos and birthdays, use dueDate directly.
-  // Combine all tasks
+  // Combine all tasks (each task already has its type property)
   let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
   // Sort by due date (use nextDue if available, otherwise dueDate)
   allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
+
   const container = document.getElementById("all-tasks-view");
   container.innerHTML = "";
   allTasks.forEach(task => {
-    let category = "";
-    if (task.frequency !== undefined && task.lastCompleted !== undefined) {
-      category = "Repeating";
-    } else if (task.frequency !== undefined && task.lastContact !== undefined) {
-      category = "Keep in Touch";
-    } else if (task.completed !== undefined) {
-      category = "One-off Todo";
-    } else {
-      category = "Birthday/Occasion";
+    let categoryLabel = "";
+    switch(task.type) {
+      case "repeating":
+        categoryLabel = "Repeating";
+        break;
+      case "contact":
+        categoryLabel = "Keep in Touch";
+        break;
+      case "todo":
+        categoryLabel = "One-off Todo";
+        break;
+      case "birthday":
+        categoryLabel = "Birthday/Occasion";
+        break;
+      default:
+        categoryLabel = "Unknown";
     }
+    // Build action buttons depending on category.
+    let actionsHtml = "";
+    if (task.type === "repeating") {
+      actionsHtml = `
+        <button class="complete-btn" onclick="markRepeatingTaskCompleted('${task.docId}', this.taskData)">Completed Today</button>
+        <button class="edit-btn" onclick="editRepeatingTask('${task.docId}', this.taskData)">Edit</button>
+        <button class="delete-btn" onclick="deleteRepeatingTask('${task.docId}')">Delete</button>`;
+    } else if (task.type === "contact") {
+      actionsHtml = `
+        <button class="complete-btn" onclick="markContactTask('${task.docId}', this.taskData)">Completed Today</button>
+        <button class="edit-btn" onclick="editContactTask('${task.docId}', this.taskData)">Edit</button>
+        <button class="delete-btn" onclick="deleteContactTask('${task.docId}')">Delete</button>`;
+    } else if (task.type === "todo") {
+      actionsHtml = `
+        <button class="complete-btn" onclick="markTodoCompleted('${task.docId}', this.taskData)">Mark Completed</button>
+        <button class="edit-btn" onclick="editTodo('${task.docId}', this.taskData)">Edit</button>
+        <button class="delete-btn" onclick="deleteTodo('${task.docId}')">Delete</button>`;
+    } else if (task.type === "birthday") {
+      actionsHtml = `
+        <button class="complete-btn" onclick="markBirthdayCompleted('${task.docId}', this.taskData)">Completed</button>
+        <button class="edit-btn" onclick="editBirthday('${task.docId}', this.taskData)">Edit</button>
+        <button class="delete-btn" onclick="deleteBirthday('${task.docId}')">Delete</button>`;
+    }
+    // Create a container for this task.
     const div = document.createElement("div");
     div.className = "task-item";
+    // Attach task data to the element for use in inline handlers.
+    div.taskData = task;
     div.innerHTML = `
-      <span><strong>${task.name}</strong> [${category}]</span>
+      <span><strong>${task.name}</strong> [${categoryLabel}]</span>
       <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()}</small>
       <br>
-      <small>Owner: ${task.owner}</small>`;
+      <small>Owner: ${task.owner}</small>
+      <div class="streak-visual">${(task.streak !== undefined) ? getStreakVisual(task.streak) : ""}</div>
+      <div class="task-actions">${actionsHtml}</div>
+    `;
     container.appendChild(div);
   });
 }
