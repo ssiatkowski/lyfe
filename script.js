@@ -29,7 +29,7 @@ const db = getFirestore(app);
 // DOM Ready
 //////////////////////////////////////////////////
 document.addEventListener("DOMContentLoaded", function () {
-  // Initialize Users & Current User (default to Alomi)
+  // --- Initialize Users & Current User (default to Alomi) ---
   if (!localStorage.getItem("users")) {
     localStorage.setItem("users", JSON.stringify(["Sebo", "Alomi"]));
   }
@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
     updateOwnerDropdowns();
   });
 
-  // Navigation Bar Handlers
+  // --- Navigation Bar Handlers ---
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function () {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // Form Handlers
+  // --- Form Handlers ---
   document.getElementById("repeating-form").addEventListener("submit", async function (e) {
     e.preventDefault();
     await addRepeatingTask();
@@ -73,34 +73,45 @@ document.addEventListener("DOMContentLoaded", function () {
     await addBirthday();
   });
 
-  // Initial Render
+  // --- Initial Render ---
   renderAllTasks();
   setInterval(renderAllTasks, 60000);
 });
 
 //////////////////////////////////////////////////
-// Navigation: Reorder Columns
+// Navigation: Reorder Columns / View All
 //////////////////////////////////////////////////
 function reorderColumns(selectedType) {
-  const container = document.querySelector(".columns");
-  const repeating = document.getElementById("repeating-column");
-  const contacts = document.getElementById("contacts-column");
-  const todos = document.getElementById("todos-column");
-  const birthdays = document.getElementById("birthdays-column");
-  container.innerHTML = "";
-  let order = [];
-  if (selectedType === "repeating") {
-    order = [repeating, contacts, todos, birthdays];
-  } else if (selectedType === "contact") {
-    order = [contacts, repeating, todos, birthdays];
-  } else if (selectedType === "todos") {
-    order = [todos, repeating, contacts, birthdays];
-  } else if (selectedType === "birthdays") {
-    order = [birthdays, repeating, contacts, todos];
+  const columnsContainer = document.getElementById("columns-container");
+  const allView = document.getElementById("all-tasks-view");
+  if(selectedType === "all") {
+    columnsContainer.style.display = "none";
+    allView.style.display = "block";
+    renderViewAll();
   } else {
-    order = [repeating, contacts, todos, birthdays];
+    columnsContainer.style.display = "flex";
+    allView.style.display = "none";
+    // Rearrange the columns according to selection:
+    const repeating = document.getElementById("repeating-column");
+    const contacts = document.getElementById("contacts-column");
+    const todos = document.getElementById("todos-column");
+    const birthdays = document.getElementById("birthdays-column");
+    let order = [];
+    if (selectedType === "repeating") {
+      order = [repeating, contacts, todos, birthdays];
+    } else if (selectedType === "contact") {
+      order = [contacts, repeating, todos, birthdays];
+    } else if (selectedType === "todos") {
+      order = [todos, repeating, contacts, birthdays];
+    } else if (selectedType === "birthdays") {
+      order = [birthdays, repeating, contacts, todos];
+    } else {
+      order = [repeating, contacts, todos, birthdays];
+    }
+    const container = document.querySelector(".columns");
+    container.innerHTML = "";
+    order.forEach(col => container.appendChild(col));
   }
-  order.forEach(col => container.appendChild(col));
 }
 
 //////////////////////////////////////////////////
@@ -118,11 +129,9 @@ function updateUserDropdowns() {
     headerSelect.appendChild(opt);
   });
 }
-
 function updateOwnerDropdowns() {
   let users = JSON.parse(localStorage.getItem("users"));
   const options = ["All", ...users];
-  // Update all owner dropdowns (including the new birthdays one, with id "b-owner")
   ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
     const select = document.getElementById(id);
     if (select) {
@@ -136,6 +145,29 @@ function updateOwnerDropdowns() {
       select.value = localStorage.getItem("currentUser");
     }
   });
+}
+function updateUserList() {
+  let users = JSON.parse(localStorage.getItem("users"));
+  const userListDiv = document.getElementById("user-list");
+  userListDiv.innerHTML = "";
+  users.forEach(user => {
+    const div = document.createElement("div");
+    div.textContent = user;
+    userListDiv.appendChild(div);
+  });
+}
+function addUser(newUser) {
+  let users = JSON.parse(localStorage.getItem("users"));
+  if (!users.includes(newUser)) {
+    users.push(newUser);
+    localStorage.setItem("users", JSON.stringify(users));
+  }
+}
+function showSettings() {
+  document.getElementById("settings-panel").style.display = "block";
+}
+function hideSettings() {
+  document.getElementById("settings-panel").style.display = "none";
 }
 
 //////////////////////////////////////////////////
@@ -694,10 +726,11 @@ function editBirthday(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// Helper: Compute Next Occurrence for Birthdays/Occasions
+// Helper: Compute Next Occurrence for Birthdays
 //////////////////////////////////////////////////
-function getNextOccurrence(dateString) {
-  const inputDate = new Date(dateString);
+function getNextOccurrence(dateInput) {
+  // dateInput is a timestamp (in ms) from the input date
+  const inputDate = new Date(dateInput);
   const month = inputDate.getMonth();
   const day = inputDate.getDate();
   const now = new Date();
@@ -708,3 +741,54 @@ function getNextOccurrence(dateString) {
   }
   return nextOccurrence;
 }
+
+//////////////////////////////////////////////////
+// View All Functionality
+//////////////////////////////////////////////////
+async function renderViewAll() {
+  // Get tasks from all four collections concurrently
+  let [repeating, contact, todos, birthdays] = await Promise.all([
+    getRepeatingTasks(),
+    getContactTasks(),
+    getTodos(),
+    getBirthdays()
+  ]);
+  // For repeating and contact tasks, compute nextDue
+  repeating.forEach(task => {
+    task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  contact.forEach(task => {
+    task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  // For todos and birthdays, use dueDate directly.
+  // Combine all tasks
+  let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
+  // Sort by due date (use nextDue if available, otherwise dueDate)
+  allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
+  const container = document.getElementById("all-tasks-view");
+  container.innerHTML = "";
+  allTasks.forEach(task => {
+    let category = "";
+    if (task.frequency !== undefined && task.lastCompleted !== undefined) {
+      category = "Repeating";
+    } else if (task.frequency !== undefined && task.lastContact !== undefined) {
+      category = "Keep in Touch";
+    } else if (task.completed !== undefined) {
+      category = "One-off Todo";
+    } else {
+      category = "Birthday/Occasion";
+    }
+    const div = document.createElement("div");
+    div.className = "task-item";
+    div.innerHTML = `
+      <span><strong>${task.name}</strong> [${category}]</span>
+      <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()}</small>
+      <br>
+      <small>Owner: ${task.owner}</small>`;
+    container.appendChild(div);
+  });
+}
+
+//////////////////////////////////////////////////
+// End of Code
+//////////////////////////////////////////////////

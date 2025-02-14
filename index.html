@@ -26,10 +26,12 @@
       <button data-type="contact">Keep in Touch</button>
       <button data-type="todos">One-off Todos</button>
       <button data-type="birthdays">Birthdays / Occasions</button>
+      <button data-type="all">View All</button>
     </nav>
 
     <div class="container">
-      <div class="columns">
+      <!-- Columns Container -->
+      <div id="columns-container" class="columns">
         <!-- Repeating Tasks Column -->
         <div class="column" id="repeating-column">
           <h2>Repeating Tasks</h2>
@@ -76,7 +78,6 @@
           <h2>Birthdays/Occasions</h2>
           <form id="birthdays-form" class="task-form">
             <input type="text" id="b-task-name" placeholder="Occasion Name" required>
-            <!-- Use a date input; the year will be ignored -->
             <label>Date:</label>
             <input type="date" id="b-date" required>
             <br>
@@ -87,11 +88,14 @@
           <div id="birthdays-list" class="task-list"></div>
         </div>
       </div>
+
+      <!-- View All Container (hidden by default) -->
+      <div id="all-tasks-view" style="display: none;"></div>
     </div>
   </div>
 
   <!-- Edit Modal -->
-  <div id="edit-modal" class="modal" style="display:none;">
+  <div id="edit-modal" class="modal" style="display: none;">
     <div class="modal-content">
       <h2 id="edit-modal-title"></h2>
       <form id="edit-form">
