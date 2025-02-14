@@ -1,13 +1,13 @@
 /* script.js */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
-import { 
-  getFirestore, 
-  collection, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc 
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc
 } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
 
 // Firebase configuration
@@ -82,7 +82,7 @@ function getStreakVisual(streak) {
 //////////////////////////////////////////////
 
 function updateUserDropdowns() {
-  let users = JSON.parse(localStorage.getItem("users"));
+  const users = JSON.parse(localStorage.getItem("users"));
   const options = ["All", ...users];
   const headerSelect = document.getElementById("user-select");
   headerSelect.innerHTML = "";
@@ -95,7 +95,7 @@ function updateUserDropdowns() {
 }
 
 function updateOwnerDropdowns() {
-  let users = JSON.parse(localStorage.getItem("users"));
+  const users = JSON.parse(localStorage.getItem("users"));
   const options = ["All", ...users];
   ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
     const select = document.getElementById(id);
@@ -113,7 +113,7 @@ function updateOwnerDropdowns() {
 }
 
 function addUser(newUser) {
-  let users = JSON.parse(localStorage.getItem("users"));
+  const users = JSON.parse(localStorage.getItem("users"));
   if (!users.includes(newUser)) {
     users.push(newUser);
     localStorage.setItem("users", JSON.stringify(users));
@@ -121,16 +121,16 @@ function addUser(newUser) {
 }
 
 //////////////////////////////////////////////
-// Data Functions for Each Category
+// Data Functions (per Category)
 //////////////////////////////////////////////
 
 // Repeating Tasks
 async function getRepeatingTasks() {
-  let tasks = [];
+  const tasks = [];
   const colRef = collection(db, "repeatingTasks");
   const querySnapshot = await getDocs(colRef);
   querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
+    const data = docSnap.data();
     data.docId = docSnap.id;
     tasks.push(data);
   });
@@ -151,7 +151,7 @@ async function addRepeatingTask() {
 }
 
 async function renderRepeatingTasks() {
-  let tasks = await getRepeatingTasks();
+  const tasks = await getRepeatingTasks();
   let filtered = filterTasksByUser(tasks);
   filtered.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
@@ -197,7 +197,7 @@ async function renderRepeatingTasks() {
 }
 
 async function markRepeatingTaskCompleted(docId, task) {
-  let now = Date.now();
+  const now = Date.now();
   const prevDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
   const gracePeriod = 24 * 60 * 60 * 1000;
   task.streak = now - prevDue <= gracePeriod ? (task.streak || 0) + 1 : 0;
@@ -213,9 +213,9 @@ async function deleteRepeatingTask(docId) {
 
 function editRepeatingTask(docId, task) {
   showEditModal(task, "repeating", async (newDate, newFreq) => {
-    let newTimestamp = parseLocalDate(newDate).getTime();
+    const newTimestamp = parseLocalDate(newDate).getTime();
     if (!isNaN(newTimestamp)) task.lastCompleted = newTimestamp;
-    let freq = parseInt(newFreq);
+    const freq = parseInt(newFreq);
     if (!isNaN(freq) && freq > 0) task.frequency = freq;
     await updateDoc(doc(db, "repeatingTasks", docId), task);
     renderRepeatingTasks();
@@ -224,11 +224,11 @@ function editRepeatingTask(docId, task) {
 
 // Keep in Touch Tasks
 async function getContactTasks() {
-  let tasks = [];
+  const tasks = [];
   const colRef = collection(db, "contactTasks");
   const querySnapshot = await getDocs(colRef);
   querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
+    const data = docSnap.data();
     data.docId = docSnap.id;
     tasks.push(data);
   });
@@ -249,7 +249,7 @@ async function addContactTask() {
 }
 
 async function renderContactTasks() {
-  let tasks = await getContactTasks();
+  const tasks = await getContactTasks();
   let filtered = filterTasksByUser(tasks);
   filtered.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
@@ -261,7 +261,6 @@ async function renderContactTasks() {
     const dueClass = getDueClass(task.nextDue);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    // Use contactName for display
     taskDiv.innerHTML = `
       <span><strong>${task.contactName || task.name}</strong> (Every ${task.frequency} days)</span>
       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
@@ -296,7 +295,7 @@ async function renderContactTasks() {
 }
 
 async function markContactTask(docId, task) {
-  let now = Date.now();
+  const now = Date.now();
   const prevDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
   const gracePeriod = 24 * 60 * 60 * 1000;
   task.streak = now - prevDue <= gracePeriod ? (task.streak || 0) + 1 : 0;
@@ -312,9 +311,9 @@ async function deleteContactTask(docId) {
 
 function editContactTask(docId, task) {
   showEditModal(task, "contact", async (newDate, newFreq) => {
-    let newTimestamp = parseLocalDate(newDate).getTime();
+    const newTimestamp = parseLocalDate(newDate).getTime();
     if (!isNaN(newTimestamp)) task.lastContact = newTimestamp;
-    let freq = parseInt(newFreq);
+    const freq = parseInt(newFreq);
     if (!isNaN(freq) && freq > 0) task.frequency = freq;
     await updateDoc(doc(db, "contactTasks", docId), task);
     renderContactTasks();
@@ -323,11 +322,11 @@ function editContactTask(docId, task) {
 
 // One-off Todos
 async function getTodos() {
-  let tasks = [];
+  const tasks = [];
   const colRef = collection(db, "todos");
   const querySnapshot = await getDocs(colRef);
   querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
+    const data = docSnap.data();
     data.docId = docSnap.id;
     tasks.push(data);
   });
@@ -347,7 +346,7 @@ async function addTodo() {
 }
 
 async function renderTodos() {
-  let tasks = await getTodos();
+  const tasks = await getTodos();
   let filtered = filterTasksByUser(tasks);
   let uncompleted = filtered.filter(t => !t.completed);
   let completed = filtered.filter(t => t.completed);
@@ -420,7 +419,7 @@ async function deleteTodo(docId) {
 
 function editTodo(docId, task) {
   showEditModal(task, "todo", async (newDate) => {
-    let newTimestamp = parseLocalDate(newDate).getTime();
+    const newTimestamp = parseLocalDate(newDate).getTime();
     if (!isNaN(newTimestamp)) task.dueDate = newTimestamp;
     await updateDoc(doc(db, "todos", docId), task);
     renderTodos();
@@ -429,11 +428,11 @@ function editTodo(docId, task) {
 
 // Birthdays/Occasions
 async function getBirthdays() {
-  let tasks = [];
+  const tasks = [];
   const colRef = collection(db, "birthdays");
   const querySnapshot = await getDocs(colRef);
   querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
+    const data = docSnap.data();
     data.docId = docSnap.id;
     tasks.push(data);
   });
@@ -454,7 +453,7 @@ async function addBirthday() {
 }
 
 async function renderBirthdays() {
-  let tasks = await getBirthdays();
+  const tasks = await getBirthdays();
   let filtered = filterTasksByUser(tasks);
   filtered = sortByDue(filtered, task => task.dueDate);
   const list = document.getElementById("birthdays-list");
@@ -510,7 +509,7 @@ async function deleteBirthday(docId) {
 
 function editBirthday(docId, task) {
   showEditModal(task, "birthday", async (newDate) => {
-    let newDue = getNextOccurrence(newDate);
+    const newDue = getNextOccurrence(newDate);
     task.dueDate = newDue;
     await updateDoc(doc(db, "birthdays", docId), task);
     renderBirthdays();
@@ -534,14 +533,13 @@ function getNextOccurrence(dateInput) {
 // View All Functionality
 //////////////////////////////////////////////
 async function renderViewAll() {
-  // Get tasks from all collections and filter by current user
-  let [repeating, contact, todos, birthdays] = await Promise.all([
+  const [repeating, contact, todos, birthdays] = await Promise.all([
     getRepeatingTasks(),
     getContactTasks(),
     getTodos(),
     getBirthdays()
   ]);
-  // Compute nextDue and assign displayName where needed
+  // For repeating and contact tasks, compute nextDue and assign displayName.
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
     task.displayName = task.name;
@@ -552,15 +550,15 @@ async function renderViewAll() {
   });
   todos.forEach(task => { task.displayName = task.name; });
   birthdays.forEach(task => { task.displayName = task.name; });
-  
-  // Ensure task types are set (if missing)
-  repeating.forEach(task => { task.type = task.type || "repeating"; });
-  contact.forEach(task => { task.type = task.type || "contact"; });
-  todos.forEach(task => { task.type = task.type || "todo"; });
-  birthdays.forEach(task => { task.type = task.type || "birthday"; });
-  
+
+  // Ensure types are set.
+  repeating.forEach(task => task.type = task.type || "repeating");
+  contact.forEach(task => task.type = task.type || "contact");
+  todos.forEach(task => task.type = task.type || "todo");
+  birthdays.forEach(task => task.type = task.type || "birthday");
+
+  // In View All, we filter by current user.
   let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
-  // Filter by current user (if not "All")
   allTasks = filterTasksByUser(allTasks);
   allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
   const container = document.getElementById("all-tasks-view");
@@ -569,15 +567,16 @@ async function renderViewAll() {
   allTasks.forEach(task => {
     window.taskCache[task.docId] = task;
     let categoryLabel = "";
-    switch(task.type) {
+    switch (task.type) {
       case "repeating": categoryLabel = "Repeating"; break;
-      case "contact": categoryLabel = "Keep in Touch"; break;
-      case "todo": categoryLabel = "One-off Todo"; break;
-      case "birthday": categoryLabel = "Birthday/Occasion"; break;
-      default: categoryLabel = "Unknown";
+      case "contact":   categoryLabel = "Keep in Touch"; break;
+      case "todo":      categoryLabel = "One-off Todo"; break;
+      case "birthday":  categoryLabel = "Birthday/Occasion"; break;
+      default:          categoryLabel = "Unknown";
     }
     const div = document.createElement("div");
     div.className = "task-item";
+    // Combine Due and Owner on one line with a pipe separator.
     div.innerHTML = `
       <span><strong>${task.displayName}</strong> [${categoryLabel}]</span>
       <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()} | Owner: ${task.owner}</small>
@@ -617,7 +616,7 @@ function getViewAllActions(task) {
 }
 
 //////////////////////////////////////////////
-// Expose Functions for Inline Handlers
+// Expose Functions for Inline Handlers in View All
 //////////////////////////////////////////////
 window.markRepeatingTaskCompleted = markRepeatingTaskCompleted;
 window.editRepeatingTask = editRepeatingTask;
