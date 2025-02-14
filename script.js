@@ -86,49 +86,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ===== SCOREBOARD FUNCTIONS =====
 
-// Returns true if the user has no overdue/uncompleted tasks for today.
-async function isCleanDayForUser(user) {
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  
-  // Retrieve individual tasks for this user.
-  let repeating = (await getRepeatingTasks()).filter(task => task.owner === user);
-  let contact   = (await getContactTasks()).filter(task => task.owner === user);
-  let todos     = (await getTodos()).filter(task => task.owner === user);
-  let birthdays = (await getBirthdays()).filter(task => task.owner === user);
-  
-  // For repeating and contact tasks, compute nextDue.
-  repeating.forEach(task => {
+/// === CATEGORY CLEAN CHECK FUNCTIONS ===
+async function isRepeatingCleanForUser(user) {
+  let tasks = (await getRepeatingTasks()).filter(task => task.owner === user);
+  let today = new Date();
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  tasks.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
   });
-  contact.forEach(task => {
+  return tasks.every(task => task.nextDue >= todayMidnight);
+}
+
+async function isContactCleanForUser(user) {
+  let tasks = (await getContactTasks()).filter(task => task.owner === user);
+  let today = new Date();
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  tasks.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
   });
-  
-  // Check for overdue tasks:
-  // - For repeating/contact: overdue if nextDue is before today's midnight.
-  // - For todos: if not completed and dueDate is before today's midnight.
-  // - For birthdays: if dueDate is before today's midnight.
-  if (repeating.some(task => task.nextDue < todayMidnight)) return false;
-  if (contact.some(task => task.nextDue < todayMidnight)) return false;
-  if (todos.some(task => !task.completed && task.dueDate < todayMidnight)) return false;
-  if (birthdays.some(task => task.dueDate < todayMidnight)) return false;
-  
-  return true;
+  return tasks.every(task => task.nextDue >= todayMidnight);
 }
 
-// Returns true if the user's birthday tasks are "clean" for today (i.e. none are overdue).
+async function isTodoCleanForUser(user) {
+  let tasks = (await getTodos()).filter(task => task.owner === user);
+  let today = new Date();
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  // For todos, if a task is not completed and its due date is before today, then it's not clean.
+  return tasks.every(task => task.completed || task.dueDate >= todayMidnight);
+}
+
+// isBirthdayCleanForUser is already defined in your code:
 async function isBirthdayCleanForUser(user) {
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  let birthdays = (await getBirthdays()).filter(task => task.owner === user);
-  // For birthdays, consider it clean if all birthday tasks have dueDate >= today.
-  return birthdays.every(task => task.dueDate >= todayMidnight);
+  let tasks = (await getBirthdays()).filter(task => task.owner === user);
+  let today = new Date();
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  // Consider birthday clean if all birthday tasks have dueDate >= today.
+  return tasks.every(task => task.dueDate >= todayMidnight);
 }
 
-// Returns a visual representation for streak values, using stars and checkmarks.
-// For the overall streak, cap the effective value at 100;
-// for birthdays, we allow a cap up to 1000.
+// === STREAK VISUAL HELPER ===
+// Displays streak as stars/checkmarks. For repeating/contact/todo, cap at 100; for birthdays, cap at 1000.
 function getStreakVisualForScore(streak, cap) {
   const effective = Math.min(streak, cap);
   let stars = Math.floor(effective / 10);
@@ -148,107 +145,86 @@ function getStreakVisualForScore(streak, cap) {
   return visual;
 }
 
-// Updates the scoreboard for all users and saves it in localStorage.
-// The scoreboard object structure is as follows:
-// {
-//   "User1": {
-//     totalCleanDays: number,
-//     overallStreak: number,
-//     lastOverallUpdate: "YYYY-MM-DD",
-//     birthdayCleanDays: number,
-//     birthdayStreak: number,
-//     lastBirthdayUpdate: "YYYY-MM-DD"
-//   },
-//   "User2": { ... }
-// }
+// === UPDATE SCOREBOARD (CATEGORY-SPECIFIC) ===
 async function updateScoreboard() {
   const users = JSON.parse(localStorage.getItem("users"));
   let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
-  
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  // For each user, update a streak for each category.
   for (const user of users) {
-    // Initialize if needed.
     if (!scoreboard[user]) {
       scoreboard[user] = {
-        totalCleanDays: 0,
-        overallStreak: 0,
-        lastOverallUpdate: "",
-        birthdayCleanDays: 0,
-        birthdayStreak: 0,
-        lastBirthdayUpdate: ""
+        repeatingStreak: 0, lastRepeatingUpdate: "",
+        contactStreak: 0,   lastContactUpdate: "",
+        todoStreak: 0,      lastTodoUpdate: "",
+        birthdayStreak: 0,  lastBirthdayUpdate: ""
       };
     }
-    
-    // ---- Overall Clean Day Streak ----
-    if (scoreboard[user].lastOverallUpdate !== todayStr) {
-      const overallClean = await isCleanDayForUser(user);
-      if (overallClean) {
-        // Check if yesterday was updated.
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split("T")[0];
-        
-        if (scoreboard[user].lastOverallUpdate === yesterdayStr) {
-          scoreboard[user].overallStreak += 1;
-        } else {
-          scoreboard[user].overallStreak = 1;
-        }
-        scoreboard[user].totalCleanDays += 1;
-      } else {
-        scoreboard[user].overallStreak = 0;
-      }
-      scoreboard[user].lastOverallUpdate = todayStr;
+    // Repeating Tasks
+    if (scoreboard[user].lastRepeatingUpdate !== todayStr) {
+      let clean = await isRepeatingCleanForUser(user);
+      scoreboard[user].repeatingStreak = clean
+        ? (scoreboard[user].lastRepeatingUpdate === yesterdayStr ? scoreboard[user].repeatingStreak + 1 : 1)
+        : 0;
+      scoreboard[user].lastRepeatingUpdate = todayStr;
     }
-    
-    // ---- Birthday Clean Day Streak ----
+    // Keep in Touch
+    if (scoreboard[user].lastContactUpdate !== todayStr) {
+      let clean = await isContactCleanForUser(user);
+      scoreboard[user].contactStreak = clean
+        ? (scoreboard[user].lastContactUpdate === yesterdayStr ? scoreboard[user].contactStreak + 1 : 1)
+        : 0;
+      scoreboard[user].lastContactUpdate = todayStr;
+    }
+    // One-off Todos
+    if (scoreboard[user].lastTodoUpdate !== todayStr) {
+      let clean = await isTodoCleanForUser(user);
+      scoreboard[user].todoStreak = clean
+        ? (scoreboard[user].lastTodoUpdate === yesterdayStr ? scoreboard[user].todoStreak + 1 : 1)
+        : 0;
+      scoreboard[user].lastTodoUpdate = todayStr;
+    }
+    // Birthdays Occasions
     if (scoreboard[user].lastBirthdayUpdate !== todayStr) {
-      const birthdayClean = await isBirthdayCleanForUser(user);
-      if (birthdayClean) {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split("T")[0];
-        
-        if (scoreboard[user].lastBirthdayUpdate === yesterdayStr) {
-          scoreboard[user].birthdayStreak += 1;
-        } else {
-          scoreboard[user].birthdayStreak = 1;
-        }
-        scoreboard[user].birthdayCleanDays = (scoreboard[user].birthdayCleanDays || 0) + 1;
-      } else {
-        scoreboard[user].birthdayStreak = 0;
-      }
+      let clean = await isBirthdayCleanForUser(user);
+      scoreboard[user].birthdayStreak = clean
+        ? (scoreboard[user].lastBirthdayUpdate === yesterdayStr ? scoreboard[user].birthdayStreak + 1 : 1)
+        : 0;
       scoreboard[user].lastBirthdayUpdate = todayStr;
     }
   }
-  
   localStorage.setItem("scoreboard", JSON.stringify(scoreboard));
   displayScoreboard(scoreboard);
 }
 
-// Updates the DOM element with id="scoreboard" to show each user's stats.
+// === DISPLAY SCOREBOARD (ROWS by Category) ===
 function displayScoreboard(scoreboard) {
   const scoreboardEl = document.getElementById("scoreboard");
   if (!scoreboardEl) return;
   
-  let html = "";
-  for (const user in scoreboard) {
-    const {
-      totalCleanDays,
-      overallStreak,
-      birthdayCleanDays,
-      birthdayStreak
-    } = scoreboard[user];
-    html += `<div class="scoreboard-user">
-      <strong>${user}</strong><br>
-      Overall Clean Days: ${totalCleanDays}<br>
-      Overall Streak: ${getStreakVisualForScore(overallStreak, 100)} (${overallStreak} days)<br>
-      Birthday Clean Days: ${birthdayCleanDays || 0}<br>
-      Birthday Streak: ${getStreakVisualForScore(birthdayStreak, 1000)} (${birthdayStreak} days)
-    </div>`;
+  // Build one row per category.
+  let repeatingRow = "Repeating Tasks:<br>";
+  let contactRow = "Keep in Touch:<br>";
+  let todoRow = "One-off Todos:<br>";
+  let birthdayRow = "Birthdays Occasions:<br>";
+  
+  const users = JSON.parse(localStorage.getItem("users"));
+  for (const user of users) {
+    const data = scoreboard[user] || {};
+    repeatingRow += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
+    contactRow   += `<strong>${user}:</strong> ${getStreakVisualForScore(data.contactStreak || 0, 100)}<br>`;
+    todoRow      += `<strong>${user}:</strong> ${getStreakVisualForScore(data.todoStreak || 0, 100)}<br>`;
+    birthdayRow  += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
   }
-  scoreboardEl.innerHTML = html;
+  
+  scoreboardEl.innerHTML = repeatingRow + "<br>" + contactRow + "<br>" + todoRow + "<br>" + birthdayRow;
 }
+
 
 
 
