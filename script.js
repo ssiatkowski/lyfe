@@ -399,13 +399,15 @@ async function getContactTasks() {
 }
 async function addContactTask() {
   const owner = document.getElementById("c-owner").value;
-  const contactName = document.getElementById("c-contact-name").value;
+  // Use the same input value for both name and contactName
+  const name = document.getElementById("c-contact-name").value;
   const frequency = parseInt(document.getElementById("c-frequency").value);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const newTask = {
     owner,
-    contactName,
+    name,              // New field for consistency in View All
+    contactName: name, // Also store as contactName for the contacts view
     frequency,
     lastContact: todayMidnight,
     streak: 0,
@@ -429,9 +431,9 @@ async function renderContactTasks() {
     const dueClass = getDueClass(task.nextDue);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    // For contact tasks, display contactName
+    // For contact tasks, display the name stored in "name"
     taskDiv.innerHTML = `
-      <span><strong>${task.contactName}</strong> (Every ${task.frequency} days)</span>
+      <span><strong>${task.name}</strong> (Every ${task.frequency} days)</span>
       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
       <div class="streak-visual">${getStreakVisual(task.streak)}</div>
       <small>Owner: ${task.owner}</small>`;
@@ -732,21 +734,28 @@ async function renderViewAll() {
     getTodos(),
     getBirthdays()
   ]);
-  // For repeating and contact tasks, compute nextDue and normalize display name.
+  
+  // Filter tasks by current user (or "All")
+  repeating = filterTasksByUser(repeating);
+  contact = filterTasksByUser(contact);
+  todos = filterTasksByUser(todos);
+  birthdays = filterTasksByUser(birthdays);
+
+  // For repeating and contact tasks, compute nextDue and set display names.
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
-    task.displayName = task.name;
+    task.displayName = task.name || "No Name";
   });
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
-    // Use contactName if available; otherwise fall back to name.
-    task.displayName = task.contactName || task.name;
+    // Use the "name" field (now set in addContactTask) for display.
+    task.displayName = task.name || task.contactName || "No Name";
   });
   todos.forEach(task => {
-    task.displayName = task.name;
+    task.displayName = task.name || "No Name";
   });
   birthdays.forEach(task => {
-    task.displayName = task.name;
+    task.displayName = task.name || "No Name";
   });
   let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
   allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
@@ -772,9 +781,7 @@ async function renderViewAll() {
     div.className = "task-item";
     div.innerHTML = `
       <span><strong>${task.displayName}</strong> [${categoryLabel}]</span>
-      <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()}</small>
-      <br>
-      <small>Owner: ${task.owner}</small>
+      <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()} | Owner: ${task.owner}</small>
       <div class="streak-visual">${(task.streak !== undefined) ? getStreakVisual(task.streak) : ""}</div>
       <div class="task-actions">
         ${getViewAllActions(task)}
@@ -809,3 +816,19 @@ function getViewAllActions(task) {
     return "";
   }
 }
+
+//////////////////////////////////////////////////
+// Expose Functions for Inline Event Handlers
+//////////////////////////////////////////////////
+window.markRepeatingTaskCompleted = markRepeatingTaskCompleted;
+window.editRepeatingTask = editRepeatingTask;
+window.deleteRepeatingTask = deleteRepeatingTask;
+window.markContactTask = markContactTask;
+window.editContactTask = editContactTask;
+window.deleteContactTask = deleteContactTask;
+window.markTodoCompleted = markTodoCompleted;
+window.editTodo = editTodo;
+window.deleteTodo = deleteTodo;
+window.markBirthdayCompleted = markBirthdayCompleted;
+window.editBirthday = editBirthday;
+window.deleteBirthday = deleteBirthday;
