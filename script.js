@@ -117,55 +117,20 @@ async function isCleanDayForUser(user) {
   return true;
 }
 
-// Updates the scoreboard for all users and saves it in localStorage.
-// Structure: { "User1": { totalDays, streak, lastUpdate }, "User2": {...} }
-async function updateScoreboard() {
-  const users = JSON.parse(localStorage.getItem("users"));
-  let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
+// Returns true if the user's birthday tasks are "clean" for today (i.e. none are overdue).
+async function isBirthdayCleanForUser(user) {
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
-  
-  for (const user of users) {
-    // Initialize if needed.
-    if (!scoreboard[user]) {
-      scoreboard[user] = { totalDays: 0, streak: 0, lastUpdate: "" };
-    }
-    
-    // Only update if we haven’t already computed for today.
-    if (scoreboard[user].lastUpdate === todayStr) continue;
-    
-    // Determine if today is a "clean" day.
-    const clean = await isCleanDayForUser(user);
-    
-    if (clean) {
-      // If yesterday was the last update, increment streak; otherwise, start at 1.
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
-      
-      if (scoreboard[user].lastUpdate === yesterdayStr) {
-        scoreboard[user].streak += 1;
-      } else {
-        scoreboard[user].streak = 1;
-      }
-      scoreboard[user].totalDays += 1;
-    } else {
-      // If any overdue tasks exist, reset the streak.
-      scoreboard[user].streak = 0;
-    }
-    
-    // Record that we've updated for today.
-    scoreboard[user].lastUpdate = todayStr;
-  }
-  
-  localStorage.setItem("scoreboard", JSON.stringify(scoreboard));
-  displayScoreboard(scoreboard);
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  let birthdays = (await getBirthdays()).filter(task => task.owner === user);
+  // For birthdays, consider it clean if all birthday tasks have dueDate >= today.
+  return birthdays.every(task => task.dueDate >= todayMidnight);
 }
 
-// Returns a visual representation of the streak.
-// Uses the same stars/✅ display as getStreakVisual but allows up to 1000.
-function getScoreStreakVisual(streak) {
-  const effective = Math.min(streak, 1000);
+// Returns a visual representation for streak values, using stars and checkmarks.
+// For the overall streak, cap the effective value at 100;
+// for birthdays, we allow a cap up to 1000.
+function getStreakVisualForScore(streak, cap) {
+  const effective = Math.min(streak, cap);
   let stars = Math.floor(effective / 10);
   let checks = effective % 10;
   let visual = "";
@@ -183,6 +148,84 @@ function getScoreStreakVisual(streak) {
   return visual;
 }
 
+// Updates the scoreboard for all users and saves it in localStorage.
+// The scoreboard object structure is as follows:
+// {
+//   "User1": {
+//     totalCleanDays: number,
+//     overallStreak: number,
+//     lastOverallUpdate: "YYYY-MM-DD",
+//     birthdayCleanDays: number,
+//     birthdayStreak: number,
+//     lastBirthdayUpdate: "YYYY-MM-DD"
+//   },
+//   "User2": { ... }
+// }
+async function updateScoreboard() {
+  const users = JSON.parse(localStorage.getItem("users"));
+  let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
+  
+  for (const user of users) {
+    // Initialize if needed.
+    if (!scoreboard[user]) {
+      scoreboard[user] = {
+        totalCleanDays: 0,
+        overallStreak: 0,
+        lastOverallUpdate: "",
+        birthdayCleanDays: 0,
+        birthdayStreak: 0,
+        lastBirthdayUpdate: ""
+      };
+    }
+    
+    // ---- Overall Clean Day Streak ----
+    if (scoreboard[user].lastOverallUpdate !== todayStr) {
+      const overallClean = await isCleanDayForUser(user);
+      if (overallClean) {
+        // Check if yesterday was updated.
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split("T")[0];
+        
+        if (scoreboard[user].lastOverallUpdate === yesterdayStr) {
+          scoreboard[user].overallStreak += 1;
+        } else {
+          scoreboard[user].overallStreak = 1;
+        }
+        scoreboard[user].totalCleanDays += 1;
+      } else {
+        scoreboard[user].overallStreak = 0;
+      }
+      scoreboard[user].lastOverallUpdate = todayStr;
+    }
+    
+    // ---- Birthday Clean Day Streak ----
+    if (scoreboard[user].lastBirthdayUpdate !== todayStr) {
+      const birthdayClean = await isBirthdayCleanForUser(user);
+      if (birthdayClean) {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split("T")[0];
+        
+        if (scoreboard[user].lastBirthdayUpdate === yesterdayStr) {
+          scoreboard[user].birthdayStreak += 1;
+        } else {
+          scoreboard[user].birthdayStreak = 1;
+        }
+        scoreboard[user].birthdayCleanDays = (scoreboard[user].birthdayCleanDays || 0) + 1;
+      } else {
+        scoreboard[user].birthdayStreak = 0;
+      }
+      scoreboard[user].lastBirthdayUpdate = todayStr;
+    }
+  }
+  
+  localStorage.setItem("scoreboard", JSON.stringify(scoreboard));
+  displayScoreboard(scoreboard);
+}
+
 // Updates the DOM element with id="scoreboard" to show each user's stats.
 function displayScoreboard(scoreboard) {
   const scoreboardEl = document.getElementById("scoreboard");
@@ -190,14 +233,23 @@ function displayScoreboard(scoreboard) {
   
   let html = "";
   for (const user in scoreboard) {
-    const { totalDays, streak } = scoreboard[user];
+    const {
+      totalCleanDays,
+      overallStreak,
+      birthdayCleanDays,
+      birthdayStreak
+    } = scoreboard[user];
     html += `<div class="scoreboard-user">
-      <strong>${user}</strong>: Total Clean Days: ${totalDays} <br>
-      Current Streak: ${getScoreStreakVisual(streak)} (${streak} days)
+      <strong>${user}</strong><br>
+      Overall Clean Days: ${totalCleanDays}<br>
+      Overall Streak: ${getStreakVisualForScore(overallStreak, 100)} (${overallStreak} days)<br>
+      Birthday Clean Days: ${birthdayCleanDays || 0}<br>
+      Birthday Streak: ${getStreakVisualForScore(birthdayStreak, 1000)} (${birthdayStreak} days)
     </div>`;
   }
   scoreboardEl.innerHTML = html;
 }
+
 
 
 //////////////////////////////////////////////////
@@ -767,7 +819,8 @@ async function addBirthday() {
     dueDate, // use the entered date directly
     completed: false,
     created: Date.now(),
-    type: "birthday"
+    type: "birthday",
+    streak: 0  // <--- add this line
   };
   await addDoc(collection(db, "birthdays"), newTask);
   document.getElementById("birthdays-form").reset();
@@ -787,6 +840,7 @@ async function renderBirthdays() {
     taskDiv.innerHTML = `
       <span><strong>${task.name}</strong></span>
       <small>Next Occurrence: ${new Date(task.dueDate).toLocaleDateString()}</small>
+      <div class="streak-visual">${getStreakVisualForScore(task.streak || 0, 1000)}</div>
       <br>
       <small>Owner: ${task.owner}</small>`;
     const actionsDiv = document.createElement("div");
@@ -816,14 +870,18 @@ async function renderBirthdays() {
     list.appendChild(taskDiv);
   });
 }
+
 async function markBirthdayCompleted(docId, task) {
   const dueDate = new Date(task.dueDate);
+  // Increment birthday streak
+  task.streak = (task.streak || 0) + 1;
   const nextYear = dueDate.getFullYear() + 1;
   const newDue = new Date(nextYear, dueDate.getMonth(), dueDate.getDate()).getTime();
   task.dueDate = newDue;
   await updateDoc(doc(db, "birthdays", docId), task);
   refreshView();
 }
+
 
 async function deleteBirthday(docId) {
   await deleteDoc(doc(db, "birthdays", docId));

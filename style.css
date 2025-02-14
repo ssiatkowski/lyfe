@@ -221,7 +221,9 @@ h1, h2 {
   padding: 1em;
   background: #f7f7f7;
   border: 1px solid #ccc;
-  margin-bottom: 1em;
+  margin: 20px auto;    /* centers the container horizontally */
+  width: fit-content;   /* shrink-to-fit the content */
+  text-align: center;   /* center text inside */
   font-family: Arial, sans-serif;
 }
 
