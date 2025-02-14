@@ -77,10 +77,128 @@ document.addEventListener("DOMContentLoaded", () => {
     await addBirthday();
   });
 
+  updateScoreboard();
+
   // Initial Render (default view: columns)
   renderAllTasks();
   setInterval(renderAllTasks, 60000);
 });
+
+// ===== SCOREBOARD FUNCTIONS =====
+
+// Returns true if the user has no overdue/uncompleted tasks for today.
+async function isCleanDayForUser(user) {
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  
+  // Retrieve individual tasks for this user.
+  let repeating = (await getRepeatingTasks()).filter(task => task.owner === user);
+  let contact   = (await getContactTasks()).filter(task => task.owner === user);
+  let todos     = (await getTodos()).filter(task => task.owner === user);
+  let birthdays = (await getBirthdays()).filter(task => task.owner === user);
+  
+  // For repeating and contact tasks, compute nextDue.
+  repeating.forEach(task => {
+    task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  contact.forEach(task => {
+    task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
+  });
+  
+  // Check for overdue tasks:
+  // - For repeating/contact: overdue if nextDue is before today's midnight.
+  // - For todos: if not completed and dueDate is before today's midnight.
+  // - For birthdays: if dueDate is before today's midnight.
+  if (repeating.some(task => task.nextDue < todayMidnight)) return false;
+  if (contact.some(task => task.nextDue < todayMidnight)) return false;
+  if (todos.some(task => !task.completed && task.dueDate < todayMidnight)) return false;
+  if (birthdays.some(task => task.dueDate < todayMidnight)) return false;
+  
+  return true;
+}
+
+// Updates the scoreboard for all users and saves it in localStorage.
+// Structure: { "User1": { totalDays, streak, lastUpdate }, "User2": {...} }
+async function updateScoreboard() {
+  const users = JSON.parse(localStorage.getItem("users"));
+  let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
+  
+  for (const user of users) {
+    // Initialize if needed.
+    if (!scoreboard[user]) {
+      scoreboard[user] = { totalDays: 0, streak: 0, lastUpdate: "" };
+    }
+    
+    // Only update if we haven’t already computed for today.
+    if (scoreboard[user].lastUpdate === todayStr) continue;
+    
+    // Determine if today is a "clean" day.
+    const clean = await isCleanDayForUser(user);
+    
+    if (clean) {
+      // If yesterday was the last update, increment streak; otherwise, start at 1.
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split("T")[0];
+      
+      if (scoreboard[user].lastUpdate === yesterdayStr) {
+        scoreboard[user].streak += 1;
+      } else {
+        scoreboard[user].streak = 1;
+      }
+      scoreboard[user].totalDays += 1;
+    } else {
+      // If any overdue tasks exist, reset the streak.
+      scoreboard[user].streak = 0;
+    }
+    
+    // Record that we've updated for today.
+    scoreboard[user].lastUpdate = todayStr;
+  }
+  
+  localStorage.setItem("scoreboard", JSON.stringify(scoreboard));
+  displayScoreboard(scoreboard);
+}
+
+// Returns a visual representation of the streak.
+// Uses the same stars/✅ display as getStreakVisual but allows up to 1000.
+function getScoreStreakVisual(streak) {
+  const effective = Math.min(streak, 1000);
+  let stars = Math.floor(effective / 10);
+  let checks = effective % 10;
+  let visual = "";
+  if (stars > 0) {
+    for (let i = 0; i < stars; i++) {
+      visual += "⭐";
+    }
+    visual += "<br>";
+  }
+  if (checks > 0) {
+    for (let i = 0; i < checks; i++) {
+      visual += "✅";
+    }
+  }
+  return visual;
+}
+
+// Updates the DOM element with id="scoreboard" to show each user's stats.
+function displayScoreboard(scoreboard) {
+  const scoreboardEl = document.getElementById("scoreboard");
+  if (!scoreboardEl) return;
+  
+  let html = "";
+  for (const user in scoreboard) {
+    const { totalDays, streak } = scoreboard[user];
+    html += `<div class="scoreboard-user">
+      <strong>${user}</strong>: Total Clean Days: ${totalDays} <br>
+      Current Streak: ${getScoreStreakVisual(streak)} (${streak} days)
+    </div>`;
+  }
+  scoreboardEl.innerHTML = html;
+}
+
 
 //////////////////////////////////////////////////
 // Navigation / Reorder Columns / View All

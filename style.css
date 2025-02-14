@@ -216,6 +216,30 @@ h1, h2 {
   display: none;
   margin-top: 20px;
 }
+
+#scoreboard {
+  padding: 1em;
+  background: #f7f7f7;
+  border: 1px solid #ccc;
+  margin-bottom: 1em;
+  font-family: Arial, sans-serif;
+}
+
+.scoreboard-user {
+  margin-bottom: 0.75em;
+  padding: 0.5em;
+  border-bottom: 1px solid #ddd;
+}
+
+.scoreboard-user strong {
+  font-size: 1.1em;
+}
+
+.scoreboard-user br {
+  margin-bottom: 0.25em;
+}
+
+
 /* Media Queries for Mobile Devices */
 @media (max-width: 768px) {
   #nav-bar button {
