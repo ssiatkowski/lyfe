@@ -1,9 +1,11 @@
 /* script.js */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
+import { 
+  initializeApp 
+} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
 import { 
   getFirestore, 
   collection, 
-  getDocs, 
+  onSnapshot,
   addDoc, 
   getDoc,
   setDoc,
@@ -25,6 +27,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+// Global caches for real-time data
+let repeatingTasksCache = [];
+let contactTasksCache = [];
+let todosCache = [];
+let birthdaysCache = [];
 
 //////////////////////////////////////////////////
 // DOM Ready
@@ -61,6 +69,60 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Set up real-time listeners
+
+  // Repeating Tasks Listener
+  const repeatingColRef = collection(db, "repeatingTasks");
+  onSnapshot(repeatingColRef, (snapshot) => {
+    repeatingTasksCache = [];
+    snapshot.forEach(docSnap => {
+      let data = docSnap.data();
+      data.docId = docSnap.id;
+      repeatingTasksCache.push(data);
+    });
+    renderRepeatingTasks();
+    updateScoreboard();
+  });
+
+  // Contact Tasks Listener
+  const contactColRef = collection(db, "contactTasks");
+  onSnapshot(contactColRef, (snapshot) => {
+    contactTasksCache = [];
+    snapshot.forEach(docSnap => {
+      let data = docSnap.data();
+      data.docId = docSnap.id;
+      contactTasksCache.push(data);
+    });
+    renderContactTasks();
+    updateScoreboard();
+  });
+
+  // Todos Listener
+  const todosColRef = collection(db, "todos");
+  onSnapshot(todosColRef, (snapshot) => {
+    todosCache = [];
+    snapshot.forEach(docSnap => {
+      let data = docSnap.data();
+      data.docId = docSnap.id;
+      todosCache.push(data);
+    });
+    renderTodos();
+    updateScoreboard();
+  });
+
+  // Birthdays Listener
+  const birthdaysColRef = collection(db, "birthdays");
+  onSnapshot(birthdaysColRef, (snapshot) => {
+    birthdaysCache = [];
+    snapshot.forEach(docSnap => {
+      let data = docSnap.data();
+      data.docId = docSnap.id;
+      birthdaysCache.push(data);
+    });
+    renderBirthdays();
+    updateScoreboard();
+  });
+
   // Form Handlers
   document.getElementById("repeating-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -80,26 +142,40 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   updateScoreboard();
-
-  // Initial Render (default view: columns)
   renderAllTasks();
   setInterval(renderAllTasks, 60000);
 });
 
-// ===== SCOREBOARD FUNCTIONS =====
+//////////////////////////////////////////////////
+// Data Access Functions (using caches)
+//////////////////////////////////////////////////
+async function getRepeatingTasks() {
+  return repeatingTasksCache;
+}
+async function getContactTasks() {
+  return contactTasksCache;
+}
+async function getTodos() {
+  return todosCache;
+}
+async function getBirthdays() {
+  return birthdaysCache;
+}
 
-/// === CATEGORY CLEAN CHECK FUNCTIONS ===
+//////////////////////////////////////////////////
+// SCOREBOARD & CLEAN CHECK FUNCTIONS
+//////////////////////////////////////////////////
 async function isCleanDayForUser(user) {
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   
-  // Retrieve individual tasks for this user.
+  // Retrieve tasks from caches
   let repeating = (await getRepeatingTasks()).filter(task => task.owner === user);
   let contact   = (await getContactTasks()).filter(task => task.owner === user);
   let todos     = (await getTodos()).filter(task => task.owner === user);
   let birthdays = (await getBirthdays()).filter(task => task.owner === user);
   
-  // For repeating and contact tasks, compute nextDue.
+  // Compute nextDue for repeating and contact tasks
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
   });
@@ -107,10 +183,6 @@ async function isCleanDayForUser(user) {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
   });
   
-  // Check for overdue tasks:
-  // - For repeating/contact: overdue if nextDue is before today's midnight.
-  // - For todos: if not completed and dueDate is before today's midnight.
-  // - For birthdays: if dueDate is before today's midnight.
   if (repeating.some(task => task.nextDue < todayMidnight)) return false;
   if (contact.some(task => task.nextDue < todayMidnight)) return false;
   if (todos.some(task => !task.completed && task.dueDate < todayMidnight)) return false;
@@ -143,28 +215,25 @@ async function isTodoCleanForUser(user) {
   let tasks = (await getTodos()).filter(task => task.owner === user);
   let today = new Date();
   let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  // For todos, if a task is not completed and its due date is before today, then it's not clean.
   return tasks.every(task => task.completed || task.dueDate >= todayMidnight);
 }
 
-// isBirthdayCleanForUser is already defined in your code:
 async function isBirthdayCleanForUser(user) {
   let tasks = (await getBirthdays()).filter(task => task.owner === user);
   let today = new Date();
   let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  // Consider birthday clean if all birthday tasks have dueDate >= today.
   return tasks.every(task => task.dueDate >= todayMidnight);
 }
 
-// === UPDATE SCOREBOARD (Stored in Firestore) ===
+//////////////////////////////////////////////////
+// SCOREBOARD UPDATE (Stored in Firestore)
+//////////////////////////////////////////////////
 async function updateScoreboard() {
   const users = JSON.parse(localStorage.getItem("users"));
   let scoreboard = JSON.parse(localStorage.getItem("scoreboard") || "{}");
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
-  // Convert to a timestamp using parseLocalDate:
+  const todayStr = today.toISOString().split("T")[0];
   const todayTimestamp = parseLocalDate(todayStr).getTime();
-
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().split("T")[0];
@@ -181,7 +250,7 @@ async function updateScoreboard() {
     } catch (err) {
       console.error(err);
     }
-    // Initialize missing fields (store last dates as timestamps)
+    // Initialize missing fields (timestamps for last updates)
     userScoreboard.overallCleanDays = userScoreboard.overallCleanDays || 0;
     userScoreboard.overallStreak = userScoreboard.overallStreak || 0;
     userScoreboard.lastOverallUpdate = userScoreboard.lastOverallUpdate || 0;
@@ -194,7 +263,7 @@ async function updateScoreboard() {
     userScoreboard.birthdayStreak = userScoreboard.birthdayStreak || 0;
     userScoreboard.lastBirthdayUpdate = userScoreboard.lastBirthdayUpdate || 0;
 
-    // ---- Overall Clean Day/Streak ----
+    // Overall Clean Day/Streak
     if (userScoreboard.lastOverallUpdate !== todayTimestamp) {
       let overallClean = await isCleanDayForUser(user);
       if (overallClean) {
@@ -207,7 +276,7 @@ async function updateScoreboard() {
       }
       userScoreboard.lastOverallUpdate = todayTimestamp;
     }
-    // ---- Repeating Tasks ----
+    // Repeating Tasks
     if (userScoreboard.lastRepeatingUpdate !== todayTimestamp) {
       let clean = await isRepeatingCleanForUser(user);
       userScoreboard.repeatingStreak = clean
@@ -215,7 +284,7 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastRepeatingUpdate = todayTimestamp;
     }
-    // ---- Keep in Touch ----
+    // Keep in Touch
     if (userScoreboard.lastContactUpdate !== todayTimestamp) {
       let clean = await isContactCleanForUser(user);
       userScoreboard.contactStreak = clean
@@ -223,7 +292,7 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastContactUpdate = todayTimestamp;
     }
-    // ---- One-off Todos ----
+    // One-off Todos
     if (userScoreboard.lastTodoUpdate !== todayTimestamp) {
       let clean = await isTodoCleanForUser(user);
       userScoreboard.todoStreak = clean
@@ -231,7 +300,7 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastTodoUpdate = todayTimestamp;
     }
-    // ---- Birthdays Occasions ----
+    // Birthdays Occasions
     if (userScoreboard.lastBirthdayUpdate !== todayTimestamp) {
       let clean = await isBirthdayCleanForUser(user);
       userScoreboard.birthdayStreak = clean
@@ -240,22 +309,21 @@ async function updateScoreboard() {
       userScoreboard.lastBirthdayUpdate = todayTimestamp;
     }
 
-    // Update Firestore (merge to preserve any additional fields)
     await setDoc(docRef, userScoreboard, { merge: true });
     scoreboard[user] = userScoreboard;
   }
   displayScoreboard(scoreboard);
 }
 
-
-// === DISPLAY SCOREBOARD (Overall + Category Rows) ===
+//////////////////////////////////////////////////
+// DISPLAY SCOREBOARD (Grid Layout via CSS)
+//////////////////////////////////////////////////
 function displayScoreboard(scoreboard) {
   const scoreboardEl = document.getElementById("scoreboard");
   if (!scoreboardEl) return;
   
   const users = JSON.parse(localStorage.getItem("users"));
   
-  // Build content for each cell:
   let overallCleanHTML = "Overall Clean Days:<br>";
   users.forEach(user => {
     let data = scoreboard[user] || {};
@@ -292,7 +360,7 @@ function displayScoreboard(scoreboard) {
     birthdayHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
   });
   
-  // Output a simple markup structure with 6 cells.
+  // Arrange as a grid with 2 columns and 3 rows
   scoreboardEl.innerHTML = `
     <div class="cell overall-clean">${overallCleanHTML}</div>
     <div class="cell overall-streak">${overallStreakHTML}</div>
@@ -303,9 +371,6 @@ function displayScoreboard(scoreboard) {
   `;
 }
 
-
-
-// === STREAK VISUAL HELPER (for scoreboard) ===
 function getStreakVisualForScore(streak, cap) {
   const effective = Math.min(streak, cap);
   let stars = Math.floor(effective / 10);
@@ -325,15 +390,10 @@ function getStreakVisualForScore(streak, cap) {
   return visual;
 }
 
-
-
-
 //////////////////////////////////////////////////
 // Navigation / Reorder Columns / View All
 //////////////////////////////////////////////////
 function reorderColumns(selectedType) {
-  // Assume your HTML has a container with id "columns-container" for the 4-column view,
-  // and a container with id "all-tasks-view" for the combined view.
   const columnsContainer = document.getElementById("columns-container");
   const allView = document.getElementById("all-tasks-view");
   if (selectedType === "all") {
@@ -343,7 +403,6 @@ function reorderColumns(selectedType) {
   } else {
     columnsContainer.style.display = "flex";
     allView.style.display = "none";
-    // Rearrange columns according to selected type.
     const repeating = document.getElementById("repeating-column");
     const contacts = document.getElementById("contacts-column");
     const todos = document.getElementById("todos-column");
@@ -439,7 +498,7 @@ function parseLocalDate(dateString) {
 }
 
 //////////////////////////////////////////////////
-// Streak Visual Function
+// Streak Visual Function (for individual tasks)
 //////////////////////////////////////////////////
 function getStreakVisual(streak) {
   const effective = Math.min(streak, 100);
@@ -518,19 +577,8 @@ function hideEditModal() {
 }
 
 //////////////////////////////////////////////////
-// Repeating Tasks
+// Repeating Tasks Functions
 //////////////////////////////////////////////////
-async function getRepeatingTasks() {
-  let tasks = [];
-  const colRef = collection(db, "repeatingTasks");
-  const querySnapshot = await getDocs(colRef);
-  querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
-    data.docId = docSnap.id;
-    tasks.push(data);
-  });
-  return tasks;
-}
 async function addRepeatingTask() {
   const owner = document.getElementById("r-owner").value;
   const name = document.getElementById("r-task-name").value;
@@ -548,7 +596,7 @@ async function addRepeatingTask() {
   await addDoc(collection(db, "repeatingTasks"), newTask);
   document.getElementById("repeating-form").reset();
   updateOwnerDropdowns();
-  renderRepeatingTasks();
+  // The listener will update renderRepeatingTasks automatically
 }
 async function renderRepeatingTasks() {
   let tasks = await getRepeatingTasks();
@@ -595,16 +643,6 @@ async function renderRepeatingTasks() {
     list.appendChild(taskDiv);
   });
 }
-// Helper function to re-render the current view
-function refreshView() {
-  const viewAllEl = document.getElementById("all-tasks-view");
-  if (viewAllEl.style.display !== "none") {
-    renderViewAll();
-  } else {
-    renderAllTasks();
-  }
-}
-// Repeating Tasks
 async function markRepeatingTaskCompleted(docId, task) {
   let now = Date.now();
   const prevDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
@@ -616,11 +654,11 @@ async function markRepeatingTaskCompleted(docId, task) {
   }
   task.lastCompleted = now;
   await updateDoc(doc(db, "repeatingTasks", docId), task);
-  refreshView(); // update view after completion
+  refreshView();
 }
 async function deleteRepeatingTask(docId) {
   await deleteDoc(doc(db, "repeatingTasks", docId));
-  refreshView(); // update view after deletion
+  refreshView();
 }
 function editRepeatingTask(docId, task) {
   showEditModal(task, "repeating", async function(newDate, newFreq) {
@@ -638,30 +676,18 @@ function editRepeatingTask(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// Keep in Touch Tasks
+// Keep in Touch Tasks Functions
 //////////////////////////////////////////////////
-async function getContactTasks() {
-  let tasks = [];
-  const colRef = collection(db, "contactTasks");
-  const querySnapshot = await getDocs(colRef);
-  querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
-    data.docId = docSnap.id;
-    tasks.push(data);
-  });
-  return tasks;
-}
 async function addContactTask() {
   const owner = document.getElementById("c-owner").value;
-  // Use the same input value for both name and contactName
   const name = document.getElementById("c-contact-name").value;
   const frequency = parseInt(document.getElementById("c-frequency").value);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const newTask = {
     owner,
-    name,              // New field for consistency in View All
-    contactName: name, // Also store as contactName for the contacts view
+    name,
+    contactName: name,
     frequency,
     lastContact: todayMidnight,
     streak: 0,
@@ -670,7 +696,6 @@ async function addContactTask() {
   await addDoc(collection(db, "contactTasks"), newTask);
   document.getElementById("contacts-form").reset();
   updateOwnerDropdowns();
-  renderContactTasks();
 }
 async function renderContactTasks() {
   let tasks = await getContactTasks();
@@ -685,7 +710,6 @@ async function renderContactTasks() {
     const dueClass = getDueClass(task.nextDue);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
-    // For contact tasks, display the name stored in "name"
     taskDiv.innerHTML = `
       <span><strong>${task.contactName}</strong> (Every ${task.frequency} days)</span>
       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
@@ -718,7 +742,6 @@ async function renderContactTasks() {
     list.appendChild(taskDiv);
   });
 }
-// Keep in Touch Tasks
 async function markContactTask(docId, task) {
   let now = Date.now();
   const prevDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
@@ -732,7 +755,6 @@ async function markContactTask(docId, task) {
   await updateDoc(doc(db, "contactTasks", docId), task);
   refreshView();
 }
-
 async function deleteContactTask(docId) {
   await deleteDoc(doc(db, "contactTasks", docId));
   refreshView();
@@ -753,19 +775,8 @@ function editContactTask(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// One-off Todos
+// One-off Todos Functions
 //////////////////////////////////////////////////
-async function getTodos() {
-  let tasks = [];
-  const colRef = collection(db, "todos");
-  const querySnapshot = await getDocs(colRef);
-  querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
-    data.docId = docSnap.id;
-    tasks.push(data);
-  });
-  return tasks;
-}
 async function addTodo() {
   const owner = document.getElementById("t-owner").value;
   const name = document.getElementById("t-task-name").value;
@@ -782,7 +793,6 @@ async function addTodo() {
   await addDoc(collection(db, "todos"), newTodo);
   document.getElementById("todos-form").reset();
   updateOwnerDropdowns();
-  renderTodos();
 }
 async function renderTodos() {
   let tasks = await getTodos();
@@ -853,7 +863,6 @@ async function markTodoCompleted(docId, task) {
   await updateDoc(doc(db, "todos", docId), { completed: true });
   refreshView();
 }
-
 async function deleteTodo(docId) {
   await deleteDoc(doc(db, "todos", docId));
   refreshView();
@@ -870,38 +879,26 @@ function editTodo(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// Birthdays/Occasions
+// Birthdays/Occasions Functions
 //////////////////////////////////////////////////
-async function getBirthdays() {
-  let tasks = [];
-  const colRef = collection(db, "birthdays");
-  const querySnapshot = await getDocs(colRef);
-  querySnapshot.forEach(docSnap => {
-    let data = docSnap.data();
-    data.docId = docSnap.id;
-    tasks.push(data);
-  });
-  return tasks;
-}
 async function addBirthday() {
   const owner = document.getElementById("b-owner").value;
   const name = document.getElementById("b-task-name").value;
   const dateStr = document.getElementById("b-date").value;
-  // Store the birthday exactly as entered (do not adjust to next year)
+  // Store the birthday exactly as entered
   const dueDate = parseLocalDate(dateStr).getTime();
   const newTask = {
     owner,
     name,
-    dueDate, // use the entered date directly
+    dueDate,
     completed: false,
     created: Date.now(),
     type: "birthday",
-    streak: 0  // <--- add this line
+    streak: 0
   };
   await addDoc(collection(db, "birthdays"), newTask);
   document.getElementById("birthdays-form").reset();
   updateOwnerDropdowns();
-  renderBirthdays();
 }
 async function renderBirthdays() {
   let tasks = await getBirthdays();
@@ -946,10 +943,8 @@ async function renderBirthdays() {
     list.appendChild(taskDiv);
   });
 }
-
 async function markBirthdayCompleted(docId, task) {
   const dueDate = new Date(task.dueDate);
-  // Increment birthday streak
   task.streak = (task.streak || 0) + 1;
   const nextYear = dueDate.getFullYear() + 1;
   const newDue = new Date(nextYear, dueDate.getMonth(), dueDate.getDate()).getTime();
@@ -957,15 +952,12 @@ async function markBirthdayCompleted(docId, task) {
   await updateDoc(doc(db, "birthdays", docId), task);
   refreshView();
 }
-
-
 async function deleteBirthday(docId) {
   await deleteDoc(doc(db, "birthdays", docId));
   refreshView();
 }
 function editBirthday(docId, task) {
   showEditModal(task, "birthday", async function(newDate) {
-    // Update with the entered date without adjusting to next year
     let newDue = parseLocalDate(newDate).getTime();
     task.dueDate = newDue;
     await updateDoc(doc(db, "birthdays", docId), task);
@@ -1000,37 +992,34 @@ async function renderViewAll() {
     getBirthdays()
   ]);
   
-  // Filter tasks by current user (or "All")
   repeating = filterTasksByUser(repeating);
   contact = filterTasksByUser(contact);
   todos = filterTasksByUser(todos).filter(todo => !todo.completed);
   birthdays = filterTasksByUser(birthdays);
-
-  // For repeating and contact tasks, compute nextDue, set display names, and assign type.
+  
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
     task.displayName = task.name || "No Name";
-    task.type = "repeating"; // assign type manually
+    task.type = "repeating";
   });
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
-    task.displayName = task.contactName || task.contactName || "No Name";
-    task.type = "contact"; // assign type manually
+    task.displayName = task.contactName || "No Name";
+    task.type = "contact";
   });
   todos.forEach(task => {
     task.displayName = task.name || "No Name";
-    task.type = "todo"; // assign type manually
+    task.type = "todo";
   });
   birthdays.forEach(task => {
     task.displayName = task.name || "No Name";
-    task.type = "birthday"; // assign type manually
+    task.type = "birthday";
   });
-
+  
   let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
   allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
   const container = document.getElementById("all-tasks-view");
   container.innerHTML = "";
-  // Clear global task cache.
   window.taskCache = {};
   allTasks.forEach(task => {
     window.taskCache[task.docId] = task;
@@ -1046,9 +1035,7 @@ async function renderViewAll() {
     } else {
       categoryLabel = "Unknown";
     }
-    // Apply color scheme: compute the due class (e.g., " overdue", " due-today", etc.)
     const dueClass = getDueClass(task.nextDue || task.dueDate);
-    
     const div = document.createElement("div");
     div.className = "task-item" + dueClass;
     div.innerHTML = `
@@ -1086,6 +1073,18 @@ function getViewAllActions(task) {
       <button class="delete-btn" onclick="deleteBirthday('${task.docId}')">Delete</button>`;
   } else {
     return "";
+  }
+}
+
+//////////////////////////////////////////////////
+// Helper: Re-render the current view
+//////////////////////////////////////////////////
+function refreshView() {
+  const viewAllEl = document.getElementById("all-tasks-view");
+  if (viewAllEl.style.display !== "none") {
+    renderViewAll();
+  } else {
+    renderAllTasks();
   }
 }
 
