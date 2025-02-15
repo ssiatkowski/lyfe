@@ -81,7 +81,6 @@ document.addEventListener("DOMContentLoaded", () => {
       repeatingTasksCache.push(data);
     });
     renderRepeatingTasks();
-    updateScoreboard();
   });
 
   // Contact Tasks Listener
@@ -94,7 +93,6 @@ document.addEventListener("DOMContentLoaded", () => {
       contactTasksCache.push(data);
     });
     renderContactTasks();
-    updateScoreboard();
   });
 
   // Todos Listener
@@ -107,7 +105,6 @@ document.addEventListener("DOMContentLoaded", () => {
       todosCache.push(data);
     });
     renderTodos();
-    updateScoreboard();
   });
 
   // Birthdays Listener
@@ -120,7 +117,6 @@ document.addEventListener("DOMContentLoaded", () => {
       birthdaysCache.push(data);
     });
     renderBirthdays();
-    updateScoreboard();
   });
 
   // Form Handlers
@@ -141,8 +137,8 @@ document.addEventListener("DOMContentLoaded", () => {
     await addBirthday();
   });
 
-  updateScoreboard();
   renderAllTasks();
+  updateScoreboard();
   setInterval(renderAllTasks, 60000);
 });
 
