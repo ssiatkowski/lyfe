@@ -267,6 +267,10 @@ h1, h2 {
   padding: 5px;
   min-height: 80px;
 }
+#calendar-view td.today {
+  border: 2px solid #007bff;
+  background-color: #e0f0ff;
+}
 .calendar-task {
   font-size: 0.8em;
   margin: 2px 0;
@@ -299,6 +303,17 @@ h1, h2 {
   text-align: center;
   margin-bottom: 10px;
 }
+.calendar-filter-label {
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin: 0 5px;
+  font-size: 0.9em;
+}
+.calendar-filter-label.calendar-repeating { background-color: #cce5ff; }
+.calendar-filter-label.calendar-contact { background-color: #ffeeba; }
+.calendar-filter-label.calendar-todo { background-color: #d4edda; }
+.calendar-filter-label.calendar-birthday { background-color: #f8d7da; }
+
 
 
 /* Media Queries for Mobile Devices */

@@ -649,14 +649,18 @@ function resetDailyTasksIfNeeded() {
 }
 
 async function renderDailyTasks() {
-  // First, check if any task needs to be reset because the day changed.
   resetDailyTasksIfNeeded();
+  const currentUser = localStorage.getItem("currentUser");
+  // Only include tasks for the current user
+  const filteredDailies = dailyTasksCache.filter(task => 
+    currentUser === "All" ? true : task.owner === currentUser
+  );
   
   const list = document.getElementById("daily-list");
   list.innerHTML = "";
   let allCompleted = true;
   
-  dailyTasksCache.forEach(task => {
+  filteredDailies.forEach(task => {
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item";
     const checkbox = document.createElement("input");
@@ -678,14 +682,14 @@ async function renderDailyTasks() {
     }
   });
   
-  // Update overall status display in this section.
-  document.getElementById("daily-status").textContent = allCompleted ? "All Daily Tasks Completed!" : "Not complete";
+  document.getElementById("daily-status").textContent =
+    allCompleted ? "All Daily Tasks Completed!" : "Not complete";
   
-  // Update overall daily streak if all tasks are done.
   if (allCompleted) {
-    updateDailyStreakForUser(localStorage.getItem("currentUser"));
+    updateDailyStreakForUser(currentUser);
   }
 }
+
 
 async function markDailyTaskCompleted(docId, task, isCompleted) {
   await updateDoc(doc(db, "dailyTasks", docId), { completed: isCompleted });
@@ -1253,45 +1257,53 @@ document.querySelectorAll(".calendar-filter").forEach(checkbox => {
 });
 
 function renderCalendarView() {
-  // Update the calendar label
   const monthNames = ["January", "February", "March", "April", "May", "June", 
                       "July", "August", "September", "October", "November", "December"];
   document.getElementById("current-month-label").textContent = monthNames[calendarMonth] + " " + calendarYear;
   
-  // Get filters
+  // Get filters from checkboxes
   let activeFilters = Array.from(document.querySelectorAll(".calendar-filter:checked")).map(cb => cb.value);
   
-  // Combine non-daily tasks from caches
   let tasks = [];
+  
+  // For repeating tasks
   repeatingTasksCache.forEach(task => { 
     task.displayDate = new Date(task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000); 
     task.taskType = "repeating"; 
+    task.displayName = task.name || "No Name";
     tasks.push(task); 
   });
+  // For contact tasks — note the contactName is used for the display name
   contactTasksCache.forEach(task => { 
     task.displayDate = new Date(task.lastContact + task.frequency * 24 * 60 * 60 * 1000); 
     task.taskType = "contact"; 
+    task.displayName = task.contactName || task.name || "No Name";
     tasks.push(task); 
   });
+  // For todos
   todosCache.forEach(task => { 
     task.displayDate = new Date(task.dueDate); 
     task.taskType = "todo"; 
+    task.displayName = task.name || "No Name";
     tasks.push(task); 
   });
+  // For birthdays
   birthdaysCache.forEach(task => { 
     task.displayDate = new Date(task.dueDate); 
     task.taskType = "birthday"; 
+    task.displayName = task.name || "No Name";
     tasks.push(task); 
   });
   
-  // Filter tasks based on activeFilters
+  // Only include tasks matching the active filters…
   tasks = tasks.filter(task => activeFilters.includes(task.taskType));
+  // ...and only those for the current user:
+  tasks = filterTasksByUser(tasks);
   
-  // Create a date grid for the given month/year
+  // Build the calendar grid (see below for today's highlight changes)
   const grid = document.getElementById("calendar-grid");
   grid.innerHTML = "";
   
-  // For simplicity, build a table-based grid
   let table = document.createElement("table");
   let headerRow = document.createElement("tr");
   ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach(day => {
@@ -1301,11 +1313,11 @@ function renderCalendarView() {
   });
   table.appendChild(headerRow);
   
-  // Determine first day and number of days in month
   let firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
   let daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-  
   let date = 1;
+  const today = new Date();
+  
   for (let i = 0; i < 6; i++) {
     let row = document.createElement("tr");
     for (let j = 0; j < 7; j++) {
@@ -1316,8 +1328,15 @@ function renderCalendarView() {
         cell.textContent = "";
       } else {
         cell.textContent = date;
-        // Find tasks due on this date
         let cellDate = new Date(calendarYear, calendarMonth, date);
+        // Highlight today's date
+        if (
+          today.getFullYear() === cellDate.getFullYear() &&
+          today.getMonth() === cellDate.getMonth() &&
+          today.getDate() === cellDate.getDate()
+        ) {
+          cell.classList.add("today");
+        }
         tasks.filter(task => {
           let taskDate = task.displayDate;
           return taskDate.getFullYear() === cellDate.getFullYear() &&
@@ -1325,8 +1344,8 @@ function renderCalendarView() {
                  taskDate.getDate() === cellDate.getDate();
         }).forEach(task => {
           let taskDiv = document.createElement("div");
-          taskDiv.textContent = task.name;
-          // Add a CSS class for color coding; e.g.,
+          taskDiv.textContent = task.displayName;
+          // Use taskType to style the calendar item
           taskDiv.className = "calendar-task calendar-" + task.taskType;
           cell.appendChild(taskDiv);
         });
@@ -1340,6 +1359,7 @@ function renderCalendarView() {
   
   grid.appendChild(table);
 }
+
 
 //////////////////////////////////////////////////
 // Expose Functions for Inline Event Handlers

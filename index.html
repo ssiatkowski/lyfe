@@ -119,10 +119,18 @@
           <button id="next-month">Next</button>
         </div>
         <div class="calendar-filters">
-          <label><input type="checkbox" class="calendar-filter" value="repeating" checked> Repeating</label>
-          <label><input type="checkbox" class="calendar-filter" value="contact" checked> Keep in Touch</label>
-          <label><input type="checkbox" class="calendar-filter" value="todo" checked> One-off Todo</label>
-          <label><input type="checkbox" class="calendar-filter" value="birthday" checked> Birthday/Occasion</label>
+          <label class="calendar-filter-label calendar-repeating">
+            <input type="checkbox" class="calendar-filter" value="repeating" checked> Repeating
+          </label>
+          <label class="calendar-filter-label calendar-contact">
+            <input type="checkbox" class="calendar-filter" value="contact" checked> Keep in Touch
+          </label>
+          <label class="calendar-filter-label calendar-todo">
+            <input type="checkbox" class="calendar-filter" value="todo" checked> One-off Todo
+          </label>
+          <label class="calendar-filter-label calendar-birthday">
+            <input type="checkbox" class="calendar-filter" value="birthday" checked> Birthday/Occasion
+          </label>
         </div>
         <div id="calendar-grid"></div>
       </div>
