@@ -986,22 +986,6 @@ function editBirthday(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// Helper: Compute Next Occurrence for Birthdays
-//////////////////////////////////////////////////
-function getNextOccurrence(dateInput) {
-  const inputDate = new Date(dateInput);
-  const month = inputDate.getMonth();
-  const day = inputDate.getDate();
-  const now = new Date();
-  let year = now.getFullYear();
-  let nextOccurrence = new Date(year, month, day).getTime();
-  if (nextOccurrence < now.getTime()) {
-    nextOccurrence = new Date(year + 1, month, day).getTime();
-  }
-  return nextOccurrence;
-}
-
-//////////////////////////////////////////////////
 // Calendar View Functions
 //////////////////////////////////////////////////
 function renderCalendarView() {
@@ -1106,7 +1090,6 @@ window.deleteRepeatingTask = deleteRepeatingTask;
 window.markContactTask = markContactTask;
 window.editContactTask = editContactTask;
 window.deleteContactTask = deleteContactTask;
-window.markTodoCompleted = markTodoCompleted;
 window.editTodo = editTodo;
 window.deleteTodo = deleteTodo;
 window.markBirthdayCompleted = markBirthdayCompleted;
