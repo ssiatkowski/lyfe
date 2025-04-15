@@ -29,7 +29,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // Global caches for real-time data
-let dailyTasksCache = [];      // NEW: Daily Tasks cache
+let dailyTasksCache = [];      // Daily tasks cache
 let repeatingTasksCache = [];
 let contactTasksCache = [];
 let todosCache = [];
@@ -56,15 +56,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("user-select").addEventListener("change", function() {
     localStorage.setItem("currentUser", this.value);
     updateOwnerDropdowns();
-    // If the View All container is visible, re-render it; otherwise, re-render all tasks
-    if (document.getElementById("all-tasks-view").style.display !== "none") {
-      renderViewAll();
-    } else {
-      renderAllTasks();
-    }
+    // When the user changes, update the currently visible view:
+    refreshView();
   });
 
-  // Navigation Bar Handlers (including View All, Daily and Calendar views)
+  // Navigation Bar Handlers (now excluding "View All")
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function() {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
@@ -158,9 +154,10 @@ document.addEventListener("DOMContentLoaded", () => {
     await addBirthday();
   });
 
-  renderAllTasks();
+  // Initially display one of your views. For example, start with Repeating Tasks:
+  reorderColumns("repeating");
   updateScoreboard();
-  setInterval(renderAllTasks, 60000);
+  setInterval(refreshView, 60000);
 });
 
 //////////////////////////////////////////////////
@@ -185,26 +182,24 @@ async function getBirthdays() {
 async function isCleanDayForUser(user) {
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  
-  // Retrieve tasks from caches
+
   let repeating = (await getRepeatingTasks()).filter(task => task.owner === user);
-  let contact   = (await getContactTasks()).filter(task => task.owner === user);
-  let todos     = (await getTodos()).filter(task => task.owner === user);
+  let contact = (await getContactTasks()).filter(task => task.owner === user);
+  let todos = (await getTodos()).filter(task => task.owner === user);
   let birthdays = (await getBirthdays()).filter(task => task.owner === user);
-  
-  // Compute nextDue for repeating and contact tasks
+
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
   });
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
   });
-  
+
   if (repeating.some(task => task.nextDue < todayMidnight)) return false;
   if (contact.some(task => task.nextDue < todayMidnight)) return false;
-  if (todos.some(task => !task.completed && task.dueDate < todayMidnight)) return false;
+  if (todos.some(task => task.dueDate < todayMidnight)) return false;
   if (birthdays.some(task => task.dueDate < todayMidnight)) return false;
-  
+
   return true;
 }
 
@@ -232,7 +227,7 @@ async function isTodoCleanForUser(user) {
   let tasks = (await getTodos()).filter(task => task.owner === user);
   let today = new Date();
   let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  return tasks.every(task => task.completed || task.dueDate >= todayMidnight);
+  return tasks.every(task => task.dueDate >= todayMidnight);
 }
 
 async function isBirthdayCleanForUser(user) {
@@ -267,7 +262,6 @@ async function updateScoreboard() {
     } catch (err) {
       console.error(err);
     }
-    // Initialize missing fields
     userScoreboard.overallCleanDays = userScoreboard.overallCleanDays || 0;
     userScoreboard.overallStreak = userScoreboard.overallStreak || 0;
     userScoreboard.lastOverallUpdate = userScoreboard.lastOverallUpdate || 0;
@@ -279,8 +273,9 @@ async function updateScoreboard() {
     userScoreboard.lastTodoUpdate = userScoreboard.lastTodoUpdate || 0;
     userScoreboard.birthdayStreak = userScoreboard.birthdayStreak || 0;
     userScoreboard.lastBirthdayUpdate = userScoreboard.lastBirthdayUpdate || 0;
+    userScoreboard.dailyStreak = userScoreboard.dailyStreak || 0;
+    userScoreboard.lastDailyUpdate = userScoreboard.lastDailyUpdate || 0;
 
-    // Overall Clean Day/Streak
     if (userScoreboard.lastOverallUpdate !== todayTimestamp) {
       let overallClean = await isCleanDayForUser(user);
       if (overallClean) {
@@ -293,7 +288,6 @@ async function updateScoreboard() {
       }
       userScoreboard.lastOverallUpdate = todayTimestamp;
     }
-    // Repeating Tasks
     if (userScoreboard.lastRepeatingUpdate !== todayTimestamp) {
       let clean = await isRepeatingCleanForUser(user);
       userScoreboard.repeatingStreak = clean
@@ -301,7 +295,6 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastRepeatingUpdate = todayTimestamp;
     }
-    // Keep in Touch
     if (userScoreboard.lastContactUpdate !== todayTimestamp) {
       let clean = await isContactCleanForUser(user);
       userScoreboard.contactStreak = clean
@@ -309,7 +302,6 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastContactUpdate = todayTimestamp;
     }
-    // One-off Todos
     if (userScoreboard.lastTodoUpdate !== todayTimestamp) {
       let clean = await isTodoCleanForUser(user);
       userScoreboard.todoStreak = clean
@@ -317,7 +309,6 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastTodoUpdate = todayTimestamp;
     }
-    // Birthdays
     if (userScoreboard.lastBirthdayUpdate !== todayTimestamp) {
       let clean = await isBirthdayCleanForUser(user);
       userScoreboard.birthdayStreak = clean
@@ -325,7 +316,10 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastBirthdayUpdate = todayTimestamp;
     }
-
+    if (userScoreboard.lastDailyUpdate !== todayTimestamp) {
+      // Update daily streak when dailies are all completed (handled in renderDailyTasks)
+      userScoreboard.lastDailyUpdate = todayTimestamp;
+    }
     await setDoc(docRef, userScoreboard, { merge: true });
     scoreboard[user] = userScoreboard;
   }
@@ -353,10 +347,10 @@ function displayScoreboard(scoreboard) {
     overallStreakHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.overallStreak || 0, 100)}<br>`;
   });
   
-  let requestingHTML = "Repeating Tasks:<br>";
+  let repeatingHTML = "Repeating Tasks:<br>";
   users.forEach(user => {
     let data = scoreboard[user] || {};
-    requestingHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
+    repeatingHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
   });
   
   let contactHTML = "Keep in Touch:<br>";
@@ -377,14 +371,20 @@ function displayScoreboard(scoreboard) {
     birthdayHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
   });
   
-  // Arrange as a grid with 2 columns and 3 rows
+  let dailyHTML = "Daily Tasks:<br>";
+  users.forEach(user => {
+    let data = scoreboard[user] || {};
+    dailyHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.dailyStreak || 0, 100)}<br>`;
+  });
+  
   scoreboardEl.innerHTML = `
     <div class="cell overall-clean">${overallCleanHTML}</div>
     <div class="cell overall-streak">${overallStreakHTML}</div>
-    <div class="cell requesting">${requestingHTML}</div>
+    <div class="cell repeating">${repeatingHTML}</div>
     <div class="cell contact">${contactHTML}</div>
     <div class="cell todo">${todoHTML}</div>
     <div class="cell birthday">${birthdayHTML}</div>
+    <div class="cell daily">${dailyHTML}</div>
   `;
 }
 
@@ -408,43 +408,35 @@ function getStreakVisualForScore(streak, cap) {
 }
 
 //////////////////////////////////////////////////
-// Navigation / Reorder Columns / View All / Calendar View
+// Navigation / Reorder Columns / Calendar View
 //////////////////////////////////////////////////
 function reorderColumns(selectedType) {
-  // Get references to all of the main containers
+  // Get references to view containers
   const columnsContainer = document.getElementById("columns-container");
-  const allView = document.getElementById("all-tasks-view");
   const dailyColumn = document.getElementById("daily-tasks-column");
   const calendarView = document.getElementById("calendar-view");
-
-  // Hide all containers by default
+  
+  // Hide all view containers initially
   columnsContainer.style.display = "none";
-  allView.style.display = "none";
   dailyColumn.style.display = "none";
   calendarView.style.display = "none";
-
-  if (selectedType === "all") {
-    allView.style.display = "block";
-    renderViewAll();
-  } else if (selectedType === "daily") {
-    // Show the Daily Tasks container and render daily tasks
+  
+  if (selectedType === "daily") {
     dailyColumn.style.display = "block";
     renderDailyTasks();
   } else if (selectedType === "calendar") {
-    // Show the Calendar View container and render calendar view tasks
     calendarView.style.display = "block";
     renderCalendarView();
   } else {
-    // For regular task views ("repeating", "contact", "todos", "birthdays")
+    // For regular task views: repeating, contact, todos, birthdays  
     columnsContainer.style.display = "flex";
-
-    // Reorder the columns as needed.
+    // Reorder the columns as needed
     const repeating = document.getElementById("repeating-column");
     const contacts = document.getElementById("contacts-column");
     const todos = document.getElementById("todos-column");
     const birthdays = document.getElementById("birthdays-column");
     let order = [];
-
+  
     if (selectedType === "repeating") {
       order = [repeating, contacts, todos, birthdays];
     } else if (selectedType === "contact") {
@@ -454,14 +446,30 @@ function reorderColumns(selectedType) {
     } else if (selectedType === "birthdays") {
       order = [birthdays, repeating, contacts, todos];
     } else {
-      // Default order if not matching any special case
+      // Default order if an unknown type is specified
       order = [repeating, contacts, todos, birthdays];
     }
-
-    // Rebuild the container with the new column order
     const container = document.querySelector(".columns");
     container.innerHTML = "";
     order.forEach(col => container.appendChild(col));
+  }
+}
+
+//////////////////////////////////////////////////
+// Helper: Re-render the current view
+//////////////////////////////////////////////////
+function refreshView() {
+  // Determine which view is currently active based on visible container.
+  if (document.getElementById("calendar-view").style.display !== "none") {
+    renderCalendarView();
+  } else if (document.getElementById("daily-tasks-column").style.display !== "none") {
+    renderDailyTasks();
+  } else {
+    // Regular task views are rendered via columns container
+    renderRepeatingTasks();
+    renderContactTasks();
+    renderTodos();
+    renderBirthdays();
   }
 }
 
@@ -519,13 +527,7 @@ function getDueClass(dueTime) {
 function filterTasksByUser(tasks) {
   const currentUser = localStorage.getItem("currentUser");
   if (currentUser === "All") return tasks;
-  return tasks.filter(task => task.owner === currentUser || task.owner === "All");
-}
-function renderAllTasks() {
-  renderRepeatingTasks();
-  renderContactTasks();
-  renderTodos();
-  renderBirthdays();
+  return tasks.filter(task => task.owner === currentUser);
 }
 function formatDateForInput(timestamp) {
   const d = new Date(timestamp);
@@ -642,7 +644,6 @@ function resetDailyTasksIfNeeded() {
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   dailyTasksCache.forEach(task => {
     if (task.lastReset < todayMidnight) {
-      // Reset task: mark as not completed and update lastReset
       updateDoc(doc(db, "dailyTasks", task.docId), { completed: false, lastReset: todayMidnight });
     }
   });
@@ -651,11 +652,9 @@ function resetDailyTasksIfNeeded() {
 async function renderDailyTasks() {
   resetDailyTasksIfNeeded();
   const currentUser = localStorage.getItem("currentUser");
-  // Only include tasks for the current user
-  const filteredDailies = dailyTasksCache.filter(task => 
+  const filteredDailies = dailyTasksCache.filter(task =>
     currentUser === "All" ? true : task.owner === currentUser
   );
-  
   const list = document.getElementById("daily-list");
   list.innerHTML = "";
   let allCompleted = true;
@@ -690,14 +689,12 @@ async function renderDailyTasks() {
   }
 }
 
-
 async function markDailyTaskCompleted(docId, task, isCompleted) {
   await updateDoc(doc(db, "dailyTasks", docId), { completed: isCompleted });
   refreshView();
 }
 
 async function updateDailyStreakForUser(user) {
-  // Retrieve daily tasks for the user
   const userDailies = dailyTasksCache.filter(task => task.owner === user);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -714,7 +711,6 @@ async function updateDailyStreakForUser(user) {
   userScoreboard.lastDailyUpdate = userScoreboard.lastDailyUpdate || 0;
   
   if (userScoreboard.lastDailyUpdate !== todayMidnight) {
-    // Increase streak (or start at 1) if all dailies are complete
     userScoreboard.dailyStreak += 1;
     userScoreboard.lastDailyUpdate = todayMidnight;
   }
@@ -919,7 +915,7 @@ function editContactTask(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// One-off Todos Functions
+// One-off Todos Functions (Updated: Delete on Complete)
 //////////////////////////////////////////////////
 async function addTodo() {
   const owner = document.getElementById("t-owner").value;
@@ -930,7 +926,6 @@ async function addTodo() {
     owner,
     name,
     dueDate,
-    completed: false,
     created: Date.now(),
     type: "todo"
   };
@@ -941,13 +936,10 @@ async function addTodo() {
 async function renderTodos() {
   let tasks = await getTodos();
   let filtered = filterTasksByUser(tasks);
-  let uncompleted = filtered.filter(t => !t.completed);
-  let completed = filtered.filter(t => t.completed);
-  uncompleted = sortByDue(uncompleted, t => t.dueDate);
-  completed = sortByDue(completed, t => t.dueDate);
+  filtered = sortByDue(filtered, t => t.dueDate);
   const list = document.getElementById("todos-list");
   list.innerHTML = "";
-  uncompleted.forEach(todo => {
+  filtered.forEach(todo => {
     const dueClass = getDueClass(todo.dueDate);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
@@ -960,9 +952,9 @@ async function renderTodos() {
     actionsDiv.className = "task-actions";
     const completeBtn = document.createElement("button");
     completeBtn.className = "complete-btn";
-    completeBtn.innerText = "Mark Completed";
+    completeBtn.innerText = "Mark Completed & Delete";
     completeBtn.addEventListener("click", async function () {
-      await markTodoCompleted(todo.docId, todo);
+      await deleteTodo(todo.docId);
     });
     actionsDiv.appendChild(completeBtn);
     const editBtn = document.createElement("button");
@@ -982,30 +974,6 @@ async function renderTodos() {
     taskDiv.appendChild(actionsDiv);
     list.appendChild(taskDiv);
   });
-  completed.forEach(todo => {
-    const taskDiv = document.createElement("div");
-    taskDiv.className = "task-item completed";
-    taskDiv.innerHTML = `
-      <span><strong>${todo.name}</strong></span>
-      <small>Due: ${new Date(todo.dueDate).toLocaleDateString()}</small>
-      <br>
-      <small>Owner: ${todo.owner}</small>`;
-    const actionsDiv = document.createElement("div");
-    actionsDiv.className = "task-actions";
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "delete-btn";
-    deleteBtn.innerText = "Delete";
-    deleteBtn.addEventListener("click", async function () {
-      await deleteTodo(todo.docId);
-    });
-    actionsDiv.appendChild(deleteBtn);
-    taskDiv.appendChild(actionsDiv);
-    list.appendChild(taskDiv);
-  });
-}
-async function markTodoCompleted(docId, task) {
-  await updateDoc(doc(db, "todos", docId), { completed: true });
-  refreshView();
 }
 async function deleteTodo(docId) {
   await deleteDoc(doc(db, "todos", docId));
@@ -1125,113 +1093,6 @@ function getNextOccurrence(dateInput) {
 }
 
 //////////////////////////////////////////////////
-// View All Functionality
-//////////////////////////////////////////////////
-async function renderViewAll() {
-  let [repeating, contact, todos, birthdays] = await Promise.all([
-    getRepeatingTasks(),
-    getContactTasks(),
-    getTodos(),
-    getBirthdays()
-  ]);
-  
-  repeating = filterTasksByUser(repeating);
-  contact = filterTasksByUser(contact);
-  todos = filterTasksByUser(todos).filter(todo => !todo.completed);
-  birthdays = filterTasksByUser(birthdays);
-  
-  repeating.forEach(task => {
-    task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
-    task.displayName = task.name || "No Name";
-    task.type = "repeating";
-  });
-  contact.forEach(task => {
-    task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
-    task.displayName = task.contactName || "No Name";
-    task.type = "contact";
-  });
-  todos.forEach(task => {
-    task.displayName = task.name || "No Name";
-    task.type = "todo";
-  });
-  birthdays.forEach(task => {
-    task.displayName = task.name || "No Name";
-    task.type = "birthday";
-  });
-  
-  let allTasks = [...repeating, ...contact, ...todos, ...birthdays];
-  allTasks = sortByDue(allTasks, task => task.nextDue || task.dueDate);
-  const container = document.getElementById("all-tasks-view");
-  container.innerHTML = "";
-  window.taskCache = {};
-  allTasks.forEach(task => {
-    window.taskCache[task.docId] = task;
-    let categoryLabel = "";
-    if (task.type === "repeating") {
-      categoryLabel = "Repeating";
-    } else if (task.type === "contact") {
-      categoryLabel = "Keep in Touch";
-    } else if (task.type === "todo") {
-      categoryLabel = "One-off Todo";
-    } else if (task.type === "birthday") {
-      categoryLabel = "Birthday/Occasion";
-    } else {
-      categoryLabel = "Unknown";
-    }
-    const dueClass = getDueClass(task.nextDue || task.dueDate);
-    const div = document.createElement("div");
-    div.className = "task-item" + dueClass;
-    div.innerHTML = `
-      <span><strong>${task.displayName}</strong> [${categoryLabel}]</span>
-      <small>Due: ${new Date(task.nextDue || task.dueDate).toLocaleDateString()} | Owner: ${task.owner}</small>
-      <div class="streak-visual">${(task.streak !== undefined) ? getStreakVisual(task.streak) : ""}</div>
-      <div class="task-actions">
-        ${getViewAllActions(task)}
-      </div>
-    `;
-    container.appendChild(div);
-  });
-}
-
-function getViewAllActions(task) {
-  if (task.type === "repeating") {
-    return `
-      <button class="complete-btn" onclick="markRepeatingTaskCompleted('${task.docId}', window.taskCache['${task.docId}'])">Completed Today</button>
-      <button class="edit-btn" onclick="editRepeatingTask('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
-      <button class="delete-btn" onclick="deleteRepeatingTask('${task.docId}')">Delete</button>`;
-  } else if (task.type === "contact") {
-    return `
-      <button class="complete-btn" onclick="markContactTask('${task.docId}', window.taskCache['${task.docId}'])">Completed Today</button>
-      <button class="edit-btn" onclick="editContactTask('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
-      <button class="delete-btn" onclick="deleteContactTask('${task.docId}')">Delete</button>`;
-  } else if (task.type === "todo") {
-    return `
-      <button class="complete-btn" onclick="markTodoCompleted('${task.docId}', window.taskCache['${task.docId}'])">Mark Completed</button>
-      <button class="edit-btn" onclick="editTodo('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
-      <button class="delete-btn" onclick="deleteTodo('${task.docId}')">Delete</button>`;
-  } else if (task.type === "birthday") {
-    return `
-      <button class="complete-btn" onclick="markBirthdayCompleted('${task.docId}', window.taskCache['${task.docId}'])">Completed</button>
-      <button class="edit-btn" onclick="editBirthday('${task.docId}', window.taskCache['${task.docId}'])">Edit</button>
-      <button class="delete-btn" onclick="deleteBirthday('${task.docId}')">Delete</button>`;
-  } else {
-    return "";
-  }
-}
-
-//////////////////////////////////////////////////
-// Helper: Re-render the current view
-//////////////////////////////////////////////////
-function refreshView() {
-  const viewAllEl = document.getElementById("all-tasks-view");
-  if (viewAllEl.style.display !== "none") {
-    renderViewAll();
-  } else {
-    renderAllTasks();
-  }
-}
-
-//////////////////////////////////////////////////
 // Calendar View Functions
 //////////////////////////////////////////////////
 document.getElementById("prev-month").addEventListener("click", function() {
@@ -1261,33 +1122,27 @@ function renderCalendarView() {
                       "July", "August", "September", "October", "November", "December"];
   document.getElementById("current-month-label").textContent = monthNames[calendarMonth] + " " + calendarYear;
   
-  // Get filters from checkboxes
   let activeFilters = Array.from(document.querySelectorAll(".calendar-filter:checked")).map(cb => cb.value);
   
   let tasks = [];
-  
-  // For repeating tasks
   repeatingTasksCache.forEach(task => { 
     task.displayDate = new Date(task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000); 
     task.taskType = "repeating"; 
     task.displayName = task.name || "No Name";
     tasks.push(task); 
   });
-  // For contact tasks — note the contactName is used for the display name
   contactTasksCache.forEach(task => { 
     task.displayDate = new Date(task.lastContact + task.frequency * 24 * 60 * 60 * 1000); 
     task.taskType = "contact"; 
     task.displayName = task.contactName || task.name || "No Name";
     tasks.push(task); 
   });
-  // For todos
   todosCache.forEach(task => { 
     task.displayDate = new Date(task.dueDate); 
     task.taskType = "todo"; 
     task.displayName = task.name || "No Name";
     tasks.push(task); 
   });
-  // For birthdays
   birthdaysCache.forEach(task => { 
     task.displayDate = new Date(task.dueDate); 
     task.taskType = "birthday"; 
@@ -1295,12 +1150,9 @@ function renderCalendarView() {
     tasks.push(task); 
   });
   
-  // Only include tasks matching the active filters…
   tasks = tasks.filter(task => activeFilters.includes(task.taskType));
-  // ...and only those for the current user:
   tasks = filterTasksByUser(tasks);
   
-  // Build the calendar grid (see below for today's highlight changes)
   const grid = document.getElementById("calendar-grid");
   grid.innerHTML = "";
   
@@ -1329,7 +1181,6 @@ function renderCalendarView() {
       } else {
         cell.textContent = date;
         let cellDate = new Date(calendarYear, calendarMonth, date);
-        // Highlight today's date
         if (
           today.getFullYear() === cellDate.getFullYear() &&
           today.getMonth() === cellDate.getMonth() &&
@@ -1345,7 +1196,6 @@ function renderCalendarView() {
         }).forEach(task => {
           let taskDiv = document.createElement("div");
           taskDiv.textContent = task.displayName;
-          // Use taskType to style the calendar item
           taskDiv.className = "calendar-task calendar-" + task.taskType;
           cell.appendChild(taskDiv);
         });
@@ -1359,7 +1209,6 @@ function renderCalendarView() {
   
   grid.appendChild(table);
 }
-
 
 //////////////////////////////////////////////////
 // Expose Functions for Inline Event Handlers

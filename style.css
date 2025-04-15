@@ -211,12 +211,6 @@ h1, h2 {
   margin-bottom: 12px;
 }
 
-/* View All Styles */
-#all-tasks-view {
-  display: none;
-  margin-top: 20px;
-}
-
 #scoreboard {
   display: grid;
   grid-template-columns: 1fr 1fr; /* two equal columns */
@@ -319,7 +313,7 @@ h1, h2 {
 /* Media Queries for Mobile Devices */
 @media (max-width: 768px) {
   #nav-bar button {
-    font-size: 0.8em;
-    padding: 5px 15px;
+    font-size: 0.7em;
+    padding: 3px 15px;
   }
 }
