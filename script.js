@@ -1098,20 +1098,6 @@ function renderCalendarView() {
 }
 
 //////////////////////////////////////////////////
-// Helper: Re-render the current view
-//////////////////////////////////////////////////
-function refreshView() {
-  if (document.getElementById("calendar-view").style.display !== "none") {
-    renderCalendarView();
-  } else {
-    renderRepeatingTasks();
-    renderContactTasks();
-    renderTodos();
-    renderBirthdays();
-  }
-}
-
-//////////////////////////////////////////////////
 // Expose Functions for Inline Event Handlers
 //////////////////////////////////////////////////
 window.markRepeatingTaskCompleted = markRepeatingTaskCompleted;
