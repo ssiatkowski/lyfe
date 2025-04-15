@@ -34,6 +34,10 @@ let contactTasksCache = [];
 let todosCache = [];
 let birthdaysCache = [];
 
+let calendarMonth = new Date().getMonth();
+let calendarYear = new Date().getFullYear();
+
+
 //////////////////////////////////////////////////
 // DOM Ready
 //////////////////////////////////////////////////
@@ -70,6 +74,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Set up real-time listeners
+
+  // Daily Tasks Listener
+  const dailyColRef = collection(db, "dailyTasks");
+  onSnapshot(dailyColRef, (snapshot) => {
+    dailyTasksCache = [];
+    snapshot.forEach(docSnap => {
+      let data = docSnap.data();
+      data.docId = docSnap.id;
+      dailyTasksCache.push(data);
+    });
+    renderDailyTasks();
+  });
 
   // Repeating Tasks Listener
   const repeatingColRef = collection(db, "repeatingTasks");
@@ -120,6 +136,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Form Handlers
+  document.getElementById("daily-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await addDailyTask();
+  });
   document.getElementById("repeating-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     await addRepeatingTask();
@@ -387,23 +407,44 @@ function getStreakVisualForScore(streak, cap) {
 }
 
 //////////////////////////////////////////////////
-// Navigation / Reorder Columns / View All
+// Navigation / Reorder Columns / View All / Calendar View
 //////////////////////////////////////////////////
 function reorderColumns(selectedType) {
+  // Get references to all of the main containers
   const columnsContainer = document.getElementById("columns-container");
   const allView = document.getElementById("all-tasks-view");
+  const dailyColumn = document.getElementById("daily-tasks-column");
+  const calendarView = document.getElementById("calendar-view");
+
+  // Hide all containers by default
+  columnsContainer.style.display = "none";
+  allView.style.display = "none";
+  dailyColumn.style.display = "none";
+  calendarView.style.display = "none";
+
   if (selectedType === "all") {
-    columnsContainer.style.display = "none";
+    // Show "View All" container and render tasks
     allView.style.display = "block";
     renderViewAll();
+  } else if (selectedType === "daily") {
+    // Show the Daily Tasks container and render daily tasks
+    dailyColumn.style.display = "block";
+    renderDailyTasks();
+  } else if (selectedType === "calendar") {
+    // Show the Calendar View container and render calendar view tasks
+    calendarView.style.display = "block";
+    renderCalendarView();
   } else {
+    // For regular task views ("repeating", "contact", "todos", "birthdays")
     columnsContainer.style.display = "flex";
-    allView.style.display = "none";
+
+    // Reorder the columns as needed. Example for different task types:
     const repeating = document.getElementById("repeating-column");
     const contacts = document.getElementById("contacts-column");
     const todos = document.getElementById("todos-column");
     const birthdays = document.getElementById("birthdays-column");
     let order = [];
+
     if (selectedType === "repeating") {
       order = [repeating, contacts, todos, birthdays];
     } else if (selectedType === "contact") {
@@ -413,13 +454,17 @@ function reorderColumns(selectedType) {
     } else if (selectedType === "birthdays") {
       order = [birthdays, repeating, contacts, todos];
     } else {
+      // Default order if not matching any special case
       order = [repeating, contacts, todos, birthdays];
     }
+
+    // Rebuild the container with the new column order
     const container = document.querySelector(".columns");
     container.innerHTML = "";
     order.forEach(col => container.appendChild(col));
   }
 }
+
 
 //////////////////////////////////////////////////
 // User Management
@@ -571,6 +616,109 @@ function showEditModal(task, type, callback) {
 function hideEditModal() {
   document.getElementById("edit-modal").style.display = "none";
 }
+
+/////////////////////////////////////////////////
+// Daily Tasks Functions
+/////////////////////////////////////////////////
+async function addDailyTask() {
+  const owner = document.getElementById("d-owner").value;
+  const name = document.getElementById("d-task-name").value;
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const newTask = {
+    owner,
+    name,
+    completed: false,
+    lastReset: todayMidnight,
+    streak: 0,
+    type: "daily"
+  };
+  await addDoc(collection(db, "dailyTasks"), newTask);
+  document.getElementById("daily-form").reset();
+  updateOwnerDropdowns();
+}
+
+function resetDailyTasksIfNeeded() {
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  dailyTasksCache.forEach(task => {
+    if (task.lastReset < todayMidnight) {
+      // Reset task: mark as not completed and update lastReset
+      updateDoc(doc(db, "dailyTasks", task.docId), { completed: false, lastReset: todayMidnight });
+    }
+  });
+}
+
+async function renderDailyTasks() {
+  // First, check if any task needs to be reset because the day changed.
+  resetDailyTasksIfNeeded();
+  
+  const list = document.getElementById("daily-list");
+  list.innerHTML = "";
+  let allCompleted = true;
+  
+  dailyTasksCache.forEach(task => {
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "task-item";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = task.completed;
+    checkbox.addEventListener("change", async function() {
+      await markDailyTaskCompleted(task.docId, task, checkbox.checked);
+    });
+    taskDiv.appendChild(checkbox);
+    
+    const span = document.createElement("span");
+    span.textContent = task.name + " (Owner: " + task.owner + ")";
+    taskDiv.appendChild(span);
+    
+    list.appendChild(taskDiv);
+    
+    if (!task.completed) {
+      allCompleted = false;
+    }
+  });
+  
+  // Update overall status display in this section.
+  document.getElementById("daily-status").textContent = allCompleted ? "All Daily Tasks Completed!" : "Not complete";
+  
+  // Update overall daily streak if all tasks are done.
+  if (allCompleted) {
+    updateDailyStreakForUser(localStorage.getItem("currentUser"));
+  }
+}
+
+async function markDailyTaskCompleted(docId, task, isCompleted) {
+  await updateDoc(doc(db, "dailyTasks", docId), { completed: isCompleted });
+  refreshView();
+}
+
+async function updateDailyStreakForUser(user) {
+  // Retrieve daily tasks for the user
+  const userDailies = dailyTasksCache.filter(task => task.owner === user);
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  let dailyScoreboardRef = doc(db, "scoreboards", user);
+  
+  let docSnap;
+  try {
+    docSnap = await getDoc(dailyScoreboardRef);
+  } catch (err) {
+    console.error(err);
+  }
+  let userScoreboard = docSnap.exists() ? docSnap.data() : {};
+  userScoreboard.dailyStreak = userScoreboard.dailyStreak || 0;
+  userScoreboard.lastDailyUpdate = userScoreboard.lastDailyUpdate || 0;
+  
+  if (userScoreboard.lastDailyUpdate !== todayMidnight) {
+    // Increase streak (or start at 1) if all dailies are complete
+    userScoreboard.dailyStreak += 1;
+    userScoreboard.lastDailyUpdate = todayMidnight;
+  }
+  await setDoc(dailyScoreboardRef, userScoreboard, { merge: true });
+}
+
+
 
 //////////////////////////////////////////////////
 // Repeating Tasks Functions
@@ -1083,6 +1231,108 @@ function refreshView() {
     renderAllTasks();
   }
 }
+
+//////////////////////////////////////////////////
+// Calendar View Functions
+//////////////////////////////////////////////////
+
+document.getElementById("prev-month").addEventListener("click", function() {
+  if (calendarMonth === 0) {
+    calendarMonth = 11;
+    calendarYear -= 1;
+  } else {
+    calendarMonth -= 1;
+  }
+  renderCalendarView();
+});
+document.getElementById("next-month").addEventListener("click", function() {
+  if (calendarMonth === 11) {
+    calendarMonth = 0;
+    calendarYear += 1;
+  } else {
+    calendarMonth += 1;
+  }
+  renderCalendarView();
+});
+document.querySelectorAll(".calendar-filter").forEach(checkbox => {
+  checkbox.addEventListener("change", renderCalendarView);
+});
+
+function renderCalendarView() {
+  // Update the calendar label
+  const monthNames = ["January", "February", "March", "April", "May", "June", 
+                      "July", "August", "September", "October", "November", "December"];
+  document.getElementById("current-month-label").textContent = monthNames[calendarMonth] + " " + calendarYear;
+  
+  // Get filters
+  let activeFilters = Array.from(document.querySelectorAll(".calendar-filter:checked")).map(cb => cb.value);
+  
+  // Combine non-daily tasks from caches
+  let tasks = [];
+  // Note: we assume your caches (repeatingTasksCache, contactTasksCache, todosCache, birthdaysCache) are up-to-date.
+  repeatingTasksCache.forEach(task => { task.displayDate = new Date(task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000); task.taskType = "repeating"; tasks.push(task); });
+  contactTasksCache.forEach(task => { task.displayDate = new Date(task.lastContact + task.frequency * 24 * 60 * 60 * 1000); task.taskType = "contact"; tasks.push(task); });
+  todosCache.forEach(task => { task.displayDate = new Date(task.dueDate); task.taskType = "todo"; tasks.push(task); });
+  birthdaysCache.forEach(task => { task.displayDate = new Date(task.dueDate); task.taskType = "birthday"; tasks.push(task); });
+  
+  // Filter tasks based on activeFilters
+  tasks = tasks.filter(task => activeFilters.includes(task.taskType));
+  
+  // Create a date grid for the given month/year
+  const grid = document.getElementById("calendar-grid");
+  grid.innerHTML = "";
+  
+  // For simplicity, build a table-based grid
+  let table = document.createElement("table");
+  let headerRow = document.createElement("tr");
+  ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach(day => {
+    let th = document.createElement("th");
+    th.textContent = day;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+  
+  // Determine first day and number of days in month
+  let firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+  let daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  
+  let date = 1;
+  for (let i = 0; i < 6; i++) {
+    let row = document.createElement("tr");
+    for (let j = 0; j < 7; j++) {
+      let cell = document.createElement("td");
+      if (i === 0 && j < firstDay) {
+        cell.textContent = "";
+      } else if (date > daysInMonth) {
+        cell.textContent = "";
+      } else {
+        cell.textContent = date;
+        // Find tasks due on this date
+        let cellDate = new Date(calendarYear, calendarMonth, date);
+        tasks.filter(task => {
+          let taskDate = task.displayDate;
+          return taskDate.getFullYear() === cellDate.getFullYear() &&
+                 taskDate.getMonth() === cellDate.getMonth() &&
+                 taskDate.getDate() === cellDate.getDate();
+        }).forEach(task => {
+          let taskDiv = document.createElement("div");
+          taskDiv.textContent = task.name;
+          // Add a CSS class for color coding; e.g.,
+          taskDiv.className = "calendar-task calendar-" + task.taskType;
+          cell.appendChild(taskDiv);
+        });
+        date++;
+      }
+      row.appendChild(cell);
+    }
+    table.appendChild(row);
+    // Stop if all dates are filled
+    if (date > daysInMonth) break;
+  }
+  
+  grid.appendChild(table);
+}
+
 
 //////////////////////////////////////////////////
 // Expose Functions for Inline Event Handlers

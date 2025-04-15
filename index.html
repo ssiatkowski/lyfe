@@ -24,16 +24,31 @@
 
     <!-- Navigation Bar for Task Types -->
     <nav id="nav-bar">
+      <button data-type="daily">Daily Tasks</button>
       <button data-type="repeating" class="active">Repeating Tasks</button>
       <button data-type="contact">Keep in Touch</button>
       <button data-type="todos">One-off Todos</button>
       <button data-type="birthdays">Birthdays / Occasions</button>
       <button data-type="all">View All</button>
+      <button data-type="calendar">Calendar View</button>
     </nav>
 
     <div class="container">
       <!-- Standard Columns Container -->
       <div id="columns-container" class="columns">
+        <!-- Daily Tasks Column -->
+        <div class="column" id="daily-tasks-column" style="display: none;">
+          <h2>Daily Tasks</h2>
+          <form id="daily-form" class="task-form">
+            <input type="text" id="d-task-name" placeholder="Daily Task Name" required>
+            <label>Owner:</label>
+            <select id="d-owner"></select>
+            <button type="submit">Add Daily Task</button>
+          </form>
+          <div id="daily-list" class="task-list"></div>
+          <div id="daily-status">Not complete</div>
+        </div>
+
         <!-- Repeating Tasks Column -->
         <div class="column" id="repeating-column">
           <h2>Repeating Tasks</h2>
@@ -93,6 +108,23 @@
 
       <!-- View All Container (hidden by default) -->
       <div id="all-tasks-view" style="display: none;"></div>
+
+      <!-- Calendar View Container -->
+      <div id="calendar-view" style="display: none;">
+        <div class="calendar-controls">
+          <button id="prev-month">Previous</button>
+          <span id="current-month-label"></span>
+          <button id="next-month">Next</button>
+        </div>
+        <div class="calendar-filters">
+          <label><input type="checkbox" class="calendar-filter" value="repeating" checked> Repeating</label>
+          <label><input type="checkbox" class="calendar-filter" value="contact" checked> Keep in Touch</label>
+          <label><input type="checkbox" class="calendar-filter" value="todo" checked> One-off Todo</label>
+          <label><input type="checkbox" class="calendar-filter" value="birthday" checked> Birthday/Occasion</label>
+        </div>
+        <div id="calendar-grid"></div>
+      </div>
+
     </div>
   </div>
 
