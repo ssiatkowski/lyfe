@@ -29,14 +29,15 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // Global caches for real-time data
+let dailyTasksCache = [];      // NEW: Daily Tasks cache
 let repeatingTasksCache = [];
 let contactTasksCache = [];
 let todosCache = [];
 let birthdaysCache = [];
 
+// Calendar state
 let calendarMonth = new Date().getMonth();
 let calendarYear = new Date().getFullYear();
-
 
 //////////////////////////////////////////////////
 // DOM Ready
@@ -63,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Navigation Bar Handlers (including View All)
+  // Navigation Bar Handlers (including View All, Daily and Calendar views)
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function() {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
@@ -266,7 +267,7 @@ async function updateScoreboard() {
     } catch (err) {
       console.error(err);
     }
-    // Initialize missing fields (timestamps for last updates)
+    // Initialize missing fields
     userScoreboard.overallCleanDays = userScoreboard.overallCleanDays || 0;
     userScoreboard.overallStreak = userScoreboard.overallStreak || 0;
     userScoreboard.lastOverallUpdate = userScoreboard.lastOverallUpdate || 0;
@@ -316,7 +317,7 @@ async function updateScoreboard() {
         : 0;
       userScoreboard.lastTodoUpdate = todayTimestamp;
     }
-    // Birthdays Occasions
+    // Birthdays
     if (userScoreboard.lastBirthdayUpdate !== todayTimestamp) {
       let clean = await isBirthdayCleanForUser(user);
       userScoreboard.birthdayStreak = clean
@@ -352,7 +353,7 @@ function displayScoreboard(scoreboard) {
     overallStreakHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.overallStreak || 0, 100)}<br>`;
   });
   
-  let requestingHTML = "Requesting Tasks:<br>";
+  let requestingHTML = "Repeating Tasks:<br>";
   users.forEach(user => {
     let data = scoreboard[user] || {};
     requestingHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
@@ -438,7 +439,7 @@ function reorderColumns(selectedType) {
     // For regular task views ("repeating", "contact", "todos", "birthdays")
     columnsContainer.style.display = "flex";
 
-    // Reorder the columns as needed. Example for different task types:
+    // Reorder the columns as needed.
     const repeating = document.getElementById("repeating-column");
     const contacts = document.getElementById("contacts-column");
     const todos = document.getElementById("todos-column");
@@ -465,7 +466,6 @@ function reorderColumns(selectedType) {
   }
 }
 
-
 //////////////////////////////////////////////////
 // User Management
 //////////////////////////////////////////////////
@@ -484,7 +484,7 @@ function updateUserDropdowns() {
 function updateOwnerDropdowns() {
   let users = JSON.parse(localStorage.getItem("users"));
   const options = ["All", ...users];
-  ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
+  ["r-owner", "c-owner", "t-owner", "b-owner", "d-owner"].forEach(id => {
     const select = document.getElementById(id);
     if (select) {
       select.innerHTML = "";
@@ -718,8 +718,6 @@ async function updateDailyStreakForUser(user) {
   await setDoc(dailyScoreboardRef, userScoreboard, { merge: true });
 }
 
-
-
 //////////////////////////////////////////////////
 // Repeating Tasks Functions
 //////////////////////////////////////////////////
@@ -740,7 +738,6 @@ async function addRepeatingTask() {
   await addDoc(collection(db, "repeatingTasks"), newTask);
   document.getElementById("repeating-form").reset();
   updateOwnerDropdowns();
-  // The listener will update renderRepeatingTasks automatically
 }
 async function renderRepeatingTasks() {
   let tasks = await getRepeatingTasks();
@@ -1029,7 +1026,6 @@ async function addBirthday() {
   const owner = document.getElementById("b-owner").value;
   const name = document.getElementById("b-task-name").value;
   const dateStr = document.getElementById("b-date").value;
-  // Store the birthday exactly as entered
   const dueDate = parseLocalDate(dateStr).getTime();
   const newTask = {
     owner,
@@ -1235,7 +1231,6 @@ function refreshView() {
 //////////////////////////////////////////////////
 // Calendar View Functions
 //////////////////////////////////////////////////
-
 document.getElementById("prev-month").addEventListener("click", function() {
   if (calendarMonth === 0) {
     calendarMonth = 11;
@@ -1269,11 +1264,26 @@ function renderCalendarView() {
   
   // Combine non-daily tasks from caches
   let tasks = [];
-  // Note: we assume your caches (repeatingTasksCache, contactTasksCache, todosCache, birthdaysCache) are up-to-date.
-  repeatingTasksCache.forEach(task => { task.displayDate = new Date(task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000); task.taskType = "repeating"; tasks.push(task); });
-  contactTasksCache.forEach(task => { task.displayDate = new Date(task.lastContact + task.frequency * 24 * 60 * 60 * 1000); task.taskType = "contact"; tasks.push(task); });
-  todosCache.forEach(task => { task.displayDate = new Date(task.dueDate); task.taskType = "todo"; tasks.push(task); });
-  birthdaysCache.forEach(task => { task.displayDate = new Date(task.dueDate); task.taskType = "birthday"; tasks.push(task); });
+  repeatingTasksCache.forEach(task => { 
+    task.displayDate = new Date(task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000); 
+    task.taskType = "repeating"; 
+    tasks.push(task); 
+  });
+  contactTasksCache.forEach(task => { 
+    task.displayDate = new Date(task.lastContact + task.frequency * 24 * 60 * 60 * 1000); 
+    task.taskType = "contact"; 
+    tasks.push(task); 
+  });
+  todosCache.forEach(task => { 
+    task.displayDate = new Date(task.dueDate); 
+    task.taskType = "todo"; 
+    tasks.push(task); 
+  });
+  birthdaysCache.forEach(task => { 
+    task.displayDate = new Date(task.dueDate); 
+    task.taskType = "birthday"; 
+    tasks.push(task); 
+  });
   
   // Filter tasks based on activeFilters
   tasks = tasks.filter(task => activeFilters.includes(task.taskType));
@@ -1326,13 +1336,11 @@ function renderCalendarView() {
       row.appendChild(cell);
     }
     table.appendChild(row);
-    // Stop if all dates are filled
     if (date > daysInMonth) break;
   }
   
   grid.appendChild(table);
 }
-
 
 //////////////////////////////////////////////////
 // Expose Functions for Inline Event Handlers
