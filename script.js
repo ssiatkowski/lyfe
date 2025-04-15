@@ -424,7 +424,6 @@ function reorderColumns(selectedType) {
   calendarView.style.display = "none";
 
   if (selectedType === "all") {
-    // Show "View All" container and render tasks
     allView.style.display = "block";
     renderViewAll();
   } else if (selectedType === "daily") {
