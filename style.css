@@ -229,23 +229,6 @@ h1, h2 {
   padding: 10px;
 }
 
-/* Daily Tasks Styling */
-#daily-tasks-column {
-  background-color: #fff;
-  padding: 15px;
-  border-radius: 5px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  margin-top: 20px;
-}
-#daily-tasks-column input[type="checkbox"] {
-  transform: scale(1.5);
-  margin-right: 10px;
-}
-#daily-status {
-  margin-top: 10px;
-  font-weight: bold;
-}
-
 /* Calendar View Styles */
 #calendar-view {
   padding: 20px;
@@ -313,7 +296,7 @@ h1, h2 {
 /* Media Queries for Mobile Devices */
 @media (max-width: 768px) {
   #nav-bar button {
-    font-size: 0.7em;
+    font-size: 0.75em;
     padding: 3px 15px;
   }
 }

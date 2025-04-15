@@ -24,7 +24,6 @@
 
     <!-- Navigation Bar for Task Types -->
     <nav id="nav-bar">
-      <button data-type="daily">Daily Tasks</button>
       <button data-type="repeating" class="active">Repeating Tasks</button>
       <button data-type="contact">Keep in Touch</button>
       <button data-type="todos">One-off Todos</button>
@@ -33,19 +32,6 @@
     </nav>
 
     <div class="container">
-
-      <!-- Daily Tasks Container (moved out) -->
-      <div id="daily-tasks-column" class="column" style="display: none;">
-        <h2>Daily Tasks</h2>
-        <form id="daily-form" class="task-form">
-          <input type="text" id="d-task-name" placeholder="Daily Task Name" required>
-          <label>Owner:</label>
-          <select id="d-owner"></select>
-          <button type="submit">Add Daily Task</button>
-        </form>
-        <div id="daily-list" class="task-list"></div>
-        <div id="daily-status">Not complete</div>
-      </div>
 
       <!-- Standard Columns Container -->
       <div id="columns-container" class="columns">

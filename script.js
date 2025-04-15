@@ -29,13 +29,12 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // Global caches for real-time data
-let dailyTasksCache = [];      // Daily tasks cache
 let repeatingTasksCache = [];
 let contactTasksCache = [];
 let todosCache = [];
 let birthdaysCache = [];
 
-// Calendar state
+// Calendar state remains for Calendar View
 let calendarMonth = new Date().getMonth();
 let calendarYear = new Date().getFullYear();
 
@@ -56,11 +55,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("user-select").addEventListener("change", function() {
     localStorage.setItem("currentUser", this.value);
     updateOwnerDropdowns();
-    // When the user changes, update the currently visible view:
     refreshView();
   });
 
-  // Navigation Bar Handlers (now excluding "View All")
+  // Navigation Bar Handlers
   document.querySelectorAll("#nav-bar button").forEach(button => {
     button.addEventListener("click", function() {
       document.querySelectorAll("#nav-bar button").forEach(btn => btn.classList.remove("active"));
@@ -71,18 +69,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Set up real-time listeners
-
-  // Daily Tasks Listener
-  const dailyColRef = collection(db, "dailyTasks");
-  onSnapshot(dailyColRef, (snapshot) => {
-    dailyTasksCache = [];
-    snapshot.forEach(docSnap => {
-      let data = docSnap.data();
-      data.docId = docSnap.id;
-      dailyTasksCache.push(data);
-    });
-    renderDailyTasks();
-  });
 
   // Repeating Tasks Listener
   const repeatingColRef = collection(db, "repeatingTasks");
@@ -133,10 +119,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Form Handlers
-  document.getElementById("daily-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    await addDailyTask();
-  });
   document.getElementById("repeating-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     await addRepeatingTask();
@@ -154,7 +136,30 @@ document.addEventListener("DOMContentLoaded", () => {
     await addBirthday();
   });
 
-  // Initially display one of your views. For example, start with Repeating Tasks:
+  // Calendar controls setup
+  document.getElementById("prev-month").addEventListener("click", function() {
+    if (calendarMonth === 0) {
+      calendarMonth = 11;
+      calendarYear -= 1;
+    } else {
+      calendarMonth -= 1;
+    }
+    renderCalendarView();
+  });
+  document.getElementById("next-month").addEventListener("click", function() {
+    if (calendarMonth === 11) {
+      calendarMonth = 0;
+      calendarYear += 1;
+    } else {
+      calendarMonth += 1;
+    }
+    renderCalendarView();
+  });
+  document.querySelectorAll(".calendar-filter").forEach(checkbox => {
+    checkbox.addEventListener("change", renderCalendarView);
+  });
+
+  // Initially display one of the views; for example, start with the Repeating Tasks view:
   reorderColumns("repeating");
   updateScoreboard();
   setInterval(refreshView, 60000);
@@ -182,24 +187,24 @@ async function getBirthdays() {
 async function isCleanDayForUser(user) {
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-
+  
   let repeating = (await getRepeatingTasks()).filter(task => task.owner === user);
   let contact = (await getContactTasks()).filter(task => task.owner === user);
   let todos = (await getTodos()).filter(task => task.owner === user);
   let birthdays = (await getBirthdays()).filter(task => task.owner === user);
-
+  
   repeating.forEach(task => {
     task.nextDue = task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000;
   });
   contact.forEach(task => {
     task.nextDue = task.lastContact + task.frequency * 24 * 60 * 60 * 1000;
   });
-
+  
   if (repeating.some(task => task.nextDue < todayMidnight)) return false;
   if (contact.some(task => task.nextDue < todayMidnight)) return false;
   if (todos.some(task => task.dueDate < todayMidnight)) return false;
   if (birthdays.some(task => task.dueDate < todayMidnight)) return false;
-
+  
   return true;
 }
 
@@ -273,9 +278,7 @@ async function updateScoreboard() {
     userScoreboard.lastTodoUpdate = userScoreboard.lastTodoUpdate || 0;
     userScoreboard.birthdayStreak = userScoreboard.birthdayStreak || 0;
     userScoreboard.lastBirthdayUpdate = userScoreboard.lastBirthdayUpdate || 0;
-    userScoreboard.dailyStreak = userScoreboard.dailyStreak || 0;
-    userScoreboard.lastDailyUpdate = userScoreboard.lastDailyUpdate || 0;
-
+   
     if (userScoreboard.lastOverallUpdate !== todayTimestamp) {
       let overallClean = await isCleanDayForUser(user);
       if (overallClean) {
@@ -315,10 +318,6 @@ async function updateScoreboard() {
         ? (userScoreboard.lastBirthdayUpdate === yesterdayTimestamp ? userScoreboard.birthdayStreak + 1 : 1)
         : 0;
       userScoreboard.lastBirthdayUpdate = todayTimestamp;
-    }
-    if (userScoreboard.lastDailyUpdate !== todayTimestamp) {
-      // Update daily streak when dailies are all completed (handled in renderDailyTasks)
-      userScoreboard.lastDailyUpdate = todayTimestamp;
     }
     await setDoc(docRef, userScoreboard, { merge: true });
     scoreboard[user] = userScoreboard;
@@ -371,12 +370,6 @@ function displayScoreboard(scoreboard) {
     birthdayHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
   });
   
-  let dailyHTML = "Daily Tasks:<br>";
-  users.forEach(user => {
-    let data = scoreboard[user] || {};
-    dailyHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.dailyStreak || 0, 100)}<br>`;
-  });
-  
   scoreboardEl.innerHTML = `
     <div class="cell overall-clean">${overallCleanHTML}</div>
     <div class="cell overall-streak">${overallStreakHTML}</div>
@@ -384,7 +377,6 @@ function displayScoreboard(scoreboard) {
     <div class="cell contact">${contactHTML}</div>
     <div class="cell todo">${todoHTML}</div>
     <div class="cell birthday">${birthdayHTML}</div>
-    <div class="cell daily">${dailyHTML}</div>
   `;
 }
 
@@ -413,18 +405,13 @@ function getStreakVisualForScore(streak, cap) {
 function reorderColumns(selectedType) {
   // Get references to view containers
   const columnsContainer = document.getElementById("columns-container");
-  const dailyColumn = document.getElementById("daily-tasks-column");
   const calendarView = document.getElementById("calendar-view");
   
-  // Hide all view containers initially
+  // Hide both containers initially
   columnsContainer.style.display = "none";
-  dailyColumn.style.display = "none";
   calendarView.style.display = "none";
   
-  if (selectedType === "daily") {
-    dailyColumn.style.display = "block";
-    renderDailyTasks();
-  } else if (selectedType === "calendar") {
+  if (selectedType === "calendar") {
     calendarView.style.display = "block";
     renderCalendarView();
   } else {
@@ -446,7 +433,6 @@ function reorderColumns(selectedType) {
     } else if (selectedType === "birthdays") {
       order = [birthdays, repeating, contacts, todos];
     } else {
-      // Default order if an unknown type is specified
       order = [repeating, contacts, todos, birthdays];
     }
     const container = document.querySelector(".columns");
@@ -459,13 +445,9 @@ function reorderColumns(selectedType) {
 // Helper: Re-render the current view
 //////////////////////////////////////////////////
 function refreshView() {
-  // Determine which view is currently active based on visible container.
   if (document.getElementById("calendar-view").style.display !== "none") {
     renderCalendarView();
-  } else if (document.getElementById("daily-tasks-column").style.display !== "none") {
-    renderDailyTasks();
   } else {
-    // Regular task views are rendered via columns container
     renderRepeatingTasks();
     renderContactTasks();
     renderTodos();
@@ -491,7 +473,7 @@ function updateUserDropdowns() {
 function updateOwnerDropdowns() {
   let users = JSON.parse(localStorage.getItem("users"));
   const options = ["All", ...users];
-  ["r-owner", "c-owner", "t-owner", "b-owner", "d-owner"].forEach(id => {
+  ["r-owner", "c-owner", "t-owner", "b-owner"].forEach(id => {
     const select = document.getElementById(id);
     if (select) {
       select.innerHTML = "";
@@ -513,6 +495,7 @@ function sortByDue(tasks, getDueDateFn) {
   return tasks.sort((a, b) => getDueDateFn(a) - getDueDateFn(b));
 }
 function getDueClass(dueTime) {
+  // This general function can be used by non-repeating tasks.
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const dueDate = new Date(dueTime);
@@ -524,6 +507,30 @@ function getDueClass(dueTime) {
   else if (diffDays <= 4) return " due-soon";
   else return "";
 }
+  
+// New function: Custom due class for repeating tasks based on frequency.
+function getRepeatingDueClass(task) {
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const diffDays = Math.floor((task.nextDue - todayMidnight) / (24 * 60 * 60 * 1000));
+  
+  if (diffDays < 0) return " overdue";         // Overdue (same for all)
+  if (diffDays === 0) return " due-today";       // Due today (same for all)
+  
+  // For frequency=1: if due in 1 day then no special coloring.
+  if (task.frequency === 1) {
+    if (diffDays === 1) return "";
+  }
+  
+  // For frequency 2 or 3: if due in 1 day return a green indicator.
+  if (task.frequency === 2 || task.frequency === 3) {
+    if (diffDays === 1) return " due-soon";
+  }
+  
+  // Otherwise, no special class.
+  return "";
+}
+
 function filterTasksByUser(tasks) {
   const currentUser = localStorage.getItem("currentUser");
   if (currentUser === "All") return tasks;
@@ -618,107 +625,8 @@ function hideEditModal() {
   document.getElementById("edit-modal").style.display = "none";
 }
 
-/////////////////////////////////////////////////
-// Daily Tasks Functions
-/////////////////////////////////////////////////
-async function addDailyTask() {
-  const owner = document.getElementById("d-owner").value;
-  const name = document.getElementById("d-task-name").value;
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const newTask = {
-    owner,
-    name,
-    completed: false,
-    lastReset: todayMidnight,
-    streak: 0,
-    type: "daily"
-  };
-  await addDoc(collection(db, "dailyTasks"), newTask);
-  document.getElementById("daily-form").reset();
-  updateOwnerDropdowns();
-}
-
-function resetDailyTasksIfNeeded() {
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  dailyTasksCache.forEach(task => {
-    if (task.lastReset < todayMidnight) {
-      updateDoc(doc(db, "dailyTasks", task.docId), { completed: false, lastReset: todayMidnight });
-    }
-  });
-}
-
-async function renderDailyTasks() {
-  resetDailyTasksIfNeeded();
-  const currentUser = localStorage.getItem("currentUser");
-  const filteredDailies = dailyTasksCache.filter(task =>
-    currentUser === "All" ? true : task.owner === currentUser
-  );
-  const list = document.getElementById("daily-list");
-  list.innerHTML = "";
-  let allCompleted = true;
-  
-  filteredDailies.forEach(task => {
-    const taskDiv = document.createElement("div");
-    taskDiv.className = "task-item";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = task.completed;
-    checkbox.addEventListener("change", async function() {
-      await markDailyTaskCompleted(task.docId, task, checkbox.checked);
-    });
-    taskDiv.appendChild(checkbox);
-    
-    const span = document.createElement("span");
-    span.textContent = task.name + " (Owner: " + task.owner + ")";
-    taskDiv.appendChild(span);
-    
-    list.appendChild(taskDiv);
-    
-    if (!task.completed) {
-      allCompleted = false;
-    }
-  });
-  
-  document.getElementById("daily-status").textContent =
-    allCompleted ? "All Daily Tasks Completed!" : "Not complete";
-  
-  if (allCompleted) {
-    updateDailyStreakForUser(currentUser);
-  }
-}
-
-async function markDailyTaskCompleted(docId, task, isCompleted) {
-  await updateDoc(doc(db, "dailyTasks", docId), { completed: isCompleted });
-  refreshView();
-}
-
-async function updateDailyStreakForUser(user) {
-  const userDailies = dailyTasksCache.filter(task => task.owner === user);
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  let dailyScoreboardRef = doc(db, "scoreboards", user);
-  
-  let docSnap;
-  try {
-    docSnap = await getDoc(dailyScoreboardRef);
-  } catch (err) {
-    console.error(err);
-  }
-  let userScoreboard = docSnap.exists() ? docSnap.data() : {};
-  userScoreboard.dailyStreak = userScoreboard.dailyStreak || 0;
-  userScoreboard.lastDailyUpdate = userScoreboard.lastDailyUpdate || 0;
-  
-  if (userScoreboard.lastDailyUpdate !== todayMidnight) {
-    userScoreboard.dailyStreak += 1;
-    userScoreboard.lastDailyUpdate = todayMidnight;
-  }
-  await setDoc(dailyScoreboardRef, userScoreboard, { merge: true });
-}
-
 //////////////////////////////////////////////////
-// Repeating Tasks Functions
+// Repeating Tasks Functions (Updated Color Coding)
 //////////////////////////////////////////////////
 async function addRepeatingTask() {
   const owner = document.getElementById("r-owner").value;
@@ -748,11 +656,12 @@ async function renderRepeatingTasks() {
   const list = document.getElementById("repeating-list");
   list.innerHTML = "";
   filtered.forEach(task => {
-    const dueClass = getDueClass(task.nextDue);
+    // Use the custom function for repeating tasks
+    const dueClass = getRepeatingDueClass(task);
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
     taskDiv.innerHTML = `
-      <span><strong>${task.name}</strong> (Every ${task.frequency} days)</span>
+      <span><strong>${task.name}</strong> (Every ${task.frequency} day${task.frequency>1?"s":""})</span>
       <small>Next due: ${new Date(task.nextDue).toLocaleDateString()}</small>
       <div class="streak-visual">${getStreakVisual(task.streak)}</div>
       <small>Owner: ${task.owner}</small>`;
@@ -851,7 +760,7 @@ async function renderContactTasks() {
     const taskDiv = document.createElement("div");
     taskDiv.className = "task-item" + dueClass;
     taskDiv.innerHTML = `
-      <span><strong>${task.contactName}</strong> (Every ${task.frequency} days)</span>
+      <span><strong>${task.contactName}</strong> (Every ${task.frequency} day${task.frequency>1?"s":""})</span>
       <small>Next contact: ${new Date(task.nextDue).toLocaleDateString()}</small>
       <div class="streak-visual">${getStreakVisual(task.streak)}</div>
       <small>Owner: ${task.owner}</small>`;
@@ -915,7 +824,7 @@ function editContactTask(docId, task) {
 }
 
 //////////////////////////////////////////////////
-// One-off Todos Functions (Updated: Delete on Complete)
+// One-off Todos Functions (Delete on Complete)
 //////////////////////////////////////////////////
 async function addTodo() {
   const owner = document.getElementById("t-owner").value;
@@ -1095,28 +1004,6 @@ function getNextOccurrence(dateInput) {
 //////////////////////////////////////////////////
 // Calendar View Functions
 //////////////////////////////////////////////////
-document.getElementById("prev-month").addEventListener("click", function() {
-  if (calendarMonth === 0) {
-    calendarMonth = 11;
-    calendarYear -= 1;
-  } else {
-    calendarMonth -= 1;
-  }
-  renderCalendarView();
-});
-document.getElementById("next-month").addEventListener("click", function() {
-  if (calendarMonth === 11) {
-    calendarMonth = 0;
-    calendarYear += 1;
-  } else {
-    calendarMonth += 1;
-  }
-  renderCalendarView();
-});
-document.querySelectorAll(".calendar-filter").forEach(checkbox => {
-  checkbox.addEventListener("change", renderCalendarView);
-});
-
 function renderCalendarView() {
   const monthNames = ["January", "February", "March", "April", "May", "June", 
                       "July", "August", "September", "October", "November", "December"];
@@ -1208,6 +1095,20 @@ function renderCalendarView() {
   }
   
   grid.appendChild(table);
+}
+
+//////////////////////////////////////////////////
+// Helper: Re-render the current view
+//////////////////////////////////////////////////
+function refreshView() {
+  if (document.getElementById("calendar-view").style.display !== "none") {
+    renderCalendarView();
+  } else {
+    renderRepeatingTasks();
+    renderContactTasks();
+    renderTodos();
+    renderBirthdays();
+  }
 }
 
 //////////////////////////////////////////////////
