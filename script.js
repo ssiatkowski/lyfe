@@ -994,97 +994,125 @@ function editBirthday(docId, task) {
 // Calendar View Functions
 //////////////////////////////////////////////////
 function renderCalendarView() {
-  const monthNames = ["January", "February", "March", "April", "May", "June", 
+  const monthNames = ["January", "February", "March", "April", "May", "June",
                       "July", "August", "September", "October", "November", "December"];
-  document.getElementById("current-month-label").textContent = monthNames[calendarMonth] + " " + calendarYear;
-  
-  let activeFilters = Array.from(document.querySelectorAll(".calendar-filter:checked")).map(cb => cb.value);
-  
+  document.getElementById("current-month-label").textContent =
+    monthNames[calendarMonth] + " " + calendarYear;
+
+  // which types to show
+  let activeFilters = Array.from(
+    document.querySelectorAll(".calendar-filter:checked")
+  ).map(cb => cb.value);
+
+  // build a flat task list with displayDate + displayName
   let tasks = [];
-  repeatingTasksCache.forEach(task => { 
-    task.displayDate = new Date(task.lastCompleted + task.frequency * 24 * 60 * 60 * 1000); 
-    task.taskType = "repeating"; 
+  repeatingTasksCache.forEach(task => {
+    task.displayDate = new Date(task.lastCompleted + task.frequency * 86400000);
+    task.taskType    = "repeating";
     task.displayName = task.name || "No Name";
-    tasks.push(task); 
+    tasks.push(task);
   });
-  contactTasksCache.forEach(task => { 
-    task.displayDate = new Date(task.lastContact + task.frequency * 24 * 60 * 60 * 1000); 
-    task.taskType = "contact"; 
+  contactTasksCache.forEach(task => {
+    task.displayDate = new Date(task.lastContact + task.frequency * 86400000);
+    task.taskType    = "contact";
     task.displayName = task.contactName || task.name || "No Name";
-    tasks.push(task); 
+    tasks.push(task);
   });
-  todosCache.forEach(task => { 
-    task.displayDate = new Date(task.dueDate); 
-    task.taskType = "todo"; 
+  todosCache.forEach(task => {
+    task.displayDate = new Date(task.dueDate);
+    task.taskType    = "todo";
     task.displayName = task.name || "No Name";
-    tasks.push(task); 
+    tasks.push(task);
   });
-  birthdaysCache.forEach(task => { 
-    task.displayDate = new Date(task.dueDate); 
-    task.taskType = "birthday"; 
+  birthdaysCache.forEach(task => {
+    task.displayDate = new Date(task.dueDate);
+    task.taskType    = "birthday";
     task.displayName = task.name || "No Name";
-    tasks.push(task); 
+    tasks.push(task);
   });
-  
-  tasks = tasks.filter(task => activeFilters.includes(task.taskType));
+
+  // apply filters and ownership
+  tasks = tasks.filter(t => activeFilters.includes(t.taskType));
   tasks = filterTasksByUser(tasks);
-  
+
   const grid = document.getElementById("calendar-grid");
   grid.innerHTML = "";
-  
-  let table = document.createElement("table");
+
+  let table    = document.createElement("table");
   let headerRow = document.createElement("tr");
-  ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach(day => {
+  ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(day => {
     let th = document.createElement("th");
     th.textContent = day;
     headerRow.appendChild(th);
   });
   table.appendChild(headerRow);
-  
-  let firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
-  let daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-  let date = 1;
-  const today = new Date();
-  
-  for (let i = 0; i < 6; i++) {
+
+  const firstDay   = new Date(calendarYear, calendarMonth, 1).getDay();
+  const daysInMonth = new Date(calendarYear, calendarMonth+1, 0).getDate();
+  let date        = 1;
+  const today     = new Date();
+  const todayMid  = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  for (let week = 0; week < 6; week++) {
     let row = document.createElement("tr");
-    for (let j = 0; j < 7; j++) {
+
+    for (let dow = 0; dow < 7; dow++) {
       let cell = document.createElement("td");
-      if (i === 0 && j < firstDay) {
+
+      if (week === 0 && dow < firstDay) {
         cell.textContent = "";
       } else if (date > daysInMonth) {
         cell.textContent = "";
       } else {
+        // fill in the date number
         cell.textContent = date;
         let cellDate = new Date(calendarYear, calendarMonth, date);
+
+        // highlight today
         if (
           today.getFullYear() === cellDate.getFullYear() &&
-          today.getMonth() === cellDate.getMonth() &&
-          today.getDate() === cellDate.getDate()
+          today.getMonth()    === cellDate.getMonth() &&
+          today.getDate()     === cellDate.getDate()
         ) {
           cell.classList.add("today");
         }
-        tasks.filter(task => {
-          let taskDate = task.displayDate;
-          return taskDate.getFullYear() === cellDate.getFullYear() &&
-                 taskDate.getMonth() === cellDate.getMonth() &&
-                 taskDate.getDate() === cellDate.getDate();
-        }).forEach(task => {
+
+        // find tasks for this cell
+        const tasksForCell = tasks.filter(task => {
+          let d = task.displayDate;
+          return (
+            d.getFullYear() === cellDate.getFullYear() &&
+            d.getMonth()    === cellDate.getMonth() &&
+            d.getDate()     === cellDate.getDate()
+          );
+        });
+
+        // if this date is before today and has tasks, mark overdue
+        if (cellDate < todayMid && tasksForCell.length) {
+          cell.classList.add("overdue-day");
+        }
+
+        // render each task
+        tasksForCell.forEach(task => {
           let taskDiv = document.createElement("div");
           taskDiv.textContent = task.displayName;
           taskDiv.className = "calendar-task calendar-" + task.taskType;
           cell.appendChild(taskDiv);
         });
+
         date++;
       }
+
       row.appendChild(cell);
     }
+
     table.appendChild(row);
     if (date > daysInMonth) break;
   }
-  
+
   grid.appendChild(table);
 }
+
 
 //////////////////////////////////////////////////
 // Expose Functions for Inline Event Handlers
