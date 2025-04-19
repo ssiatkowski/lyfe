@@ -533,8 +533,13 @@ function getRepeatingDueClass(task) {
 
 function filterTasksByUser(tasks) {
   const currentUser = localStorage.getItem("currentUser");
+  // If viewing “All”, show everything
   if (currentUser === "All") return tasks;
-  return tasks.filter(task => task.owner === currentUser);
+  // Otherwise show tasks either owned by this user or marked “All”
+  return tasks.filter(task =>
+    task.owner === currentUser ||
+    task.owner === "All"
+  );
 }
 function formatDateForInput(timestamp) {
   const d = new Date(timestamp);
