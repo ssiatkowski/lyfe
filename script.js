@@ -578,10 +578,11 @@ function getStreakVisual(streak) {
 // Edit Modal Functions
 //////////////////////////////////////////////////
 function showEditModal(task, type, callback) {
-  const modal = document.getElementById("edit-modal");
-  const titleEl = document.getElementById("edit-modal-title");
+  const modal     = document.getElementById("edit-modal");
+  const titleEl   = document.getElementById("edit-modal-title");
   const fieldsDiv = document.getElementById("edit-fields");
   fieldsDiv.innerHTML = "";
+
   function createField(labelText, inputType, value, inputId) {
     const container = document.createElement("div");
     container.className = "edit-field";
@@ -597,35 +598,67 @@ function showEditModal(task, type, callback) {
     container.appendChild(input);
     return container;
   }
+
+  // 1) Name field (for all types)
+  let currentName = task.name;
+  if (type === "contact") currentName = task.contactName || task.name;
+  fieldsDiv.appendChild(createField("Name:", "text", currentName, "edit-name"));
+
+  // 2) Date / Frequency fields as before
   if (type === "repeating") {
     titleEl.textContent = "Edit Repeating Task";
-    fieldsDiv.appendChild(createField("Last Completed Date:", "date", formatDateForInput(task.lastCompleted), "edit-date"));
-    fieldsDiv.appendChild(createField("Frequency (days):", "number", task.frequency, "edit-frequency"));
+    fieldsDiv.appendChild(
+      createField(
+        "Last Completed Date:",
+        "date",
+        formatDateForInput(task.lastCompleted),
+        "edit-date"
+      )
+    );
+    fieldsDiv.appendChild(
+      createField("Frequency (days):", "number", task.frequency, "edit-frequency")
+    );
   } else if (type === "contact") {
     titleEl.textContent = "Edit Keep in Touch Task";
-    fieldsDiv.appendChild(createField("Last Contact Date:", "date", formatDateForInput(task.lastContact), "edit-date"));
-    fieldsDiv.appendChild(createField("Frequency (days):", "number", task.frequency, "edit-frequency"));
+    fieldsDiv.appendChild(
+      createField(
+        "Last Contact Date:",
+        "date",
+        formatDateForInput(task.lastContact),
+        "edit-date"
+      )
+    );
+    fieldsDiv.appendChild(
+      createField("Frequency (days):", "number", task.frequency, "edit-frequency")
+    );
   } else if (type === "todo") {
     titleEl.textContent = "Edit One-off Todo";
-    fieldsDiv.appendChild(createField("Due Date:", "date", formatDateForInput(task.dueDate), "edit-date"));
+    fieldsDiv.appendChild(
+      createField("Due Date:", "date", formatDateForInput(task.dueDate), "edit-date")
+    );
   } else if (type === "birthday") {
     titleEl.textContent = "Edit Birthday/Occasion";
-    fieldsDiv.appendChild(createField("Occasion Date:", "date", formatDateForInput(task.dueDate), "edit-date"));
+    fieldsDiv.appendChild(
+      createField("Occasion Date:", "date", formatDateForInput(task.dueDate), "edit-date")
+    );
   }
+
   modal.style.display = "flex";
   const form = document.getElementById("edit-form");
-  form.onsubmit = function(e) {
+  form.onsubmit = function (e) {
     e.preventDefault();
-    const newDate = document.getElementById("edit-date").value;
-    let newFreq = null;
-    if (type === "repeating" || type === "contact") {
-      newFreq = document.getElementById("edit-frequency").value;
-    }
-    callback(newDate, newFreq);
+
+    // pull out all the new values
+    const newName = document.getElementById("edit-name").value;
+    const newDate = document.getElementById("edit-date")?.value;
+    const newFreq = document.getElementById("edit-frequency")?.value;
+
+    callback(newName, newDate, newFreq);
     hideEditModal();
   };
   document.getElementById("edit-cancel-btn").onclick = hideEditModal;
 }
+
 function hideEditModal() {
   document.getElementById("edit-modal").style.display = "none";
 }
@@ -715,15 +748,16 @@ async function deleteRepeatingTask(docId) {
   refreshView();
 }
 function editRepeatingTask(docId, task) {
-  showEditModal(task, "repeating", async function(newDate, newFreq) {
-    let newTimestamp = parseLocalDate(newDate).getTime();
-    if (!isNaN(newTimestamp)) {
-      task.lastCompleted = newTimestamp;
-    }
-    let freq = parseInt(newFreq);
-    if (!isNaN(freq) && freq > 0) {
-      task.frequency = freq;
-    }
+  showEditModal(task, "repeating", async (newName, newDate, newFreq) => {
+    if (newName) task.name = newName;
+
+    // parseLocalDate returns a Date at local midnight
+    const ts = parseLocalDate(newDate).getTime();
+    if (!isNaN(ts)) task.lastCompleted = ts;
+
+    const f = parseInt(newFreq);
+    if (!isNaN(f) && f > 0) task.frequency = f;
+
     await updateDoc(doc(db, "repeatingTasks", docId), task);
     renderRepeatingTasks();
   });
@@ -814,15 +848,17 @@ async function deleteContactTask(docId) {
   refreshView();
 }
 function editContactTask(docId, task) {
-  showEditModal(task, "contact", async function(newDate, newFreq) {
-    let newTimestamp = parseLocalDate(newDate).getTime();
-    if (!isNaN(newTimestamp)) {
-      task.lastContact = newTimestamp;
+  showEditModal(task, "contact", async (newName, newDate, newFreq) => {
+    if (newName) {
+      task.contactName = newName;
+      task.name = newName; 
     }
-    let freq = parseInt(newFreq);
-    if (!isNaN(freq) && freq > 0) {
-      task.frequency = freq;
-    }
+    const ts = parseLocalDate(newDate).getTime();
+    if (!isNaN(ts)) task.lastContact = ts;
+
+    const f = parseInt(newFreq);
+    if (!isNaN(f) && f > 0) task.frequency = f;
+
     await updateDoc(doc(db, "contactTasks", docId), task);
     renderContactTasks();
   });
@@ -894,11 +930,12 @@ async function deleteTodo(docId) {
   refreshView();
 }
 function editTodo(docId, task) {
-  showEditModal(task, "todo", async function(newDate) {
-    let newTimestamp = parseLocalDate(newDate).getTime();
-    if (!isNaN(newTimestamp)) {
-      task.dueDate = newTimestamp;
-    }
+  showEditModal(task, "todo", async (newName, newDate) => {
+    if (newName) task.name = newName;
+
+    const ts = parseLocalDate(newDate).getTime();
+    if (!isNaN(ts)) task.dueDate = ts;
+
     await updateDoc(doc(db, "todos", docId), task);
     renderTodos();
   });
@@ -982,9 +1019,12 @@ async function deleteBirthday(docId) {
   refreshView();
 }
 function editBirthday(docId, task) {
-  showEditModal(task, "birthday", async function(newDate) {
-    let newDue = parseLocalDate(newDate).getTime();
-    task.dueDate = newDue;
+  showEditModal(task, "birthday", async (newName, newDate) => {
+    if (newName) task.name = newName;
+
+    const ts = parseLocalDate(newDate).getTime();
+    if (!isNaN(ts)) task.dueDate = ts;
+
     await updateDoc(doc(db, "birthdays", docId), task);
     renderBirthdays();
   });

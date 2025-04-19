@@ -269,7 +269,7 @@ h1, h2 {
   background-color: #d4edda;
 }
 .calendar-birthday {
-  background-color: #f8d7da;
+  background-color: #c7acce;
 }
 /* Calendar Controls and Filters */
 .calendar-controls {
@@ -294,7 +294,7 @@ h1, h2 {
 .calendar-filter-label.calendar-repeating { background-color: #cce5ff; }
 .calendar-filter-label.calendar-contact { background-color: #ffeeba; }
 .calendar-filter-label.calendar-todo { background-color: #d4edda; }
-.calendar-filter-label.calendar-birthday { background-color: #f8d7da; }
+.calendar-filter-label.calendar-birthday { background-color: #c7acce; }
 
 
 
