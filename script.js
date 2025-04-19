@@ -270,14 +270,6 @@ async function updateScoreboard() {
     userScoreboard.overallCleanDays = userScoreboard.overallCleanDays || 0;
     userScoreboard.overallStreak = userScoreboard.overallStreak || 0;
     userScoreboard.lastOverallUpdate = userScoreboard.lastOverallUpdate || 0;
-    userScoreboard.repeatingStreak = userScoreboard.repeatingStreak || 0;
-    userScoreboard.lastRepeatingUpdate = userScoreboard.lastRepeatingUpdate || 0;
-    userScoreboard.contactStreak = userScoreboard.contactStreak || 0;
-    userScoreboard.lastContactUpdate = userScoreboard.lastContactUpdate || 0;
-    userScoreboard.todoStreak = userScoreboard.todoStreak || 0;
-    userScoreboard.lastTodoUpdate = userScoreboard.lastTodoUpdate || 0;
-    userScoreboard.birthdayStreak = userScoreboard.birthdayStreak || 0;
-    userScoreboard.lastBirthdayUpdate = userScoreboard.lastBirthdayUpdate || 0;
    
     if (userScoreboard.lastOverallUpdate !== todayTimestamp) {
       let overallClean = await isCleanDayForUser(user);
@@ -291,34 +283,7 @@ async function updateScoreboard() {
       }
       userScoreboard.lastOverallUpdate = todayTimestamp;
     }
-    if (userScoreboard.lastRepeatingUpdate !== todayTimestamp) {
-      let clean = await isRepeatingCleanForUser(user);
-      userScoreboard.repeatingStreak = clean
-        ? (userScoreboard.lastRepeatingUpdate === yesterdayTimestamp ? userScoreboard.repeatingStreak + 1 : 1)
-        : 0;
-      userScoreboard.lastRepeatingUpdate = todayTimestamp;
-    }
-    if (userScoreboard.lastContactUpdate !== todayTimestamp) {
-      let clean = await isContactCleanForUser(user);
-      userScoreboard.contactStreak = clean
-        ? (userScoreboard.lastContactUpdate === yesterdayTimestamp ? userScoreboard.contactStreak + 1 : 1)
-        : 0;
-      userScoreboard.lastContactUpdate = todayTimestamp;
-    }
-    if (userScoreboard.lastTodoUpdate !== todayTimestamp) {
-      let clean = await isTodoCleanForUser(user);
-      userScoreboard.todoStreak = clean
-        ? (userScoreboard.lastTodoUpdate === yesterdayTimestamp ? userScoreboard.todoStreak + 1 : 1)
-        : 0;
-      userScoreboard.lastTodoUpdate = todayTimestamp;
-    }
-    if (userScoreboard.lastBirthdayUpdate !== todayTimestamp) {
-      let clean = await isBirthdayCleanForUser(user);
-      userScoreboard.birthdayStreak = clean
-        ? (userScoreboard.lastBirthdayUpdate === yesterdayTimestamp ? userScoreboard.birthdayStreak + 1 : 1)
-        : 0;
-      userScoreboard.lastBirthdayUpdate = todayTimestamp;
-    }
+
     await setDoc(docRef, userScoreboard, { merge: true });
     scoreboard[user] = userScoreboard;
   }
@@ -334,49 +299,21 @@ function displayScoreboard(scoreboard) {
   
   const users = JSON.parse(localStorage.getItem("users"));
   
-  let overallCleanHTML = "Overall Clean Days:<br>";
+  let overallCleanHTML = "Total Clean Days:<br>";
   users.forEach(user => {
     let data = scoreboard[user] || {};
     overallCleanHTML += `<strong>${user}:</strong> ${data.overallCleanDays || 0}<br>`;
   });
   
-  let overallStreakHTML = "Overall Streak:<br>";
+  let overallStreakHTML = "Current Streak:<br>";
   users.forEach(user => {
     let data = scoreboard[user] || {};
     overallStreakHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.overallStreak || 0, 100)}<br>`;
   });
   
-  let repeatingHTML = "Repeating Tasks:<br>";
-  users.forEach(user => {
-    let data = scoreboard[user] || {};
-    repeatingHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.repeatingStreak || 0, 100)}<br>`;
-  });
-  
-  let contactHTML = "Keep in Touch:<br>";
-  users.forEach(user => {
-    let data = scoreboard[user] || {};
-    contactHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.contactStreak || 0, 100)}<br>`;
-  });
-  
-  let todoHTML = "One-off Todos:<br>";
-  users.forEach(user => {
-    let data = scoreboard[user] || {};
-    todoHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.todoStreak || 0, 100)}<br>`;
-  });
-  
-  let birthdayHTML = "Birthdays/Occasions:<br>";
-  users.forEach(user => {
-    let data = scoreboard[user] || {};
-    birthdayHTML += `<strong>${user}:</strong> ${getStreakVisualForScore(data.birthdayStreak || 0, 1000)}<br>`;
-  });
-  
   scoreboardEl.innerHTML = `
     <div class="cell overall-clean">${overallCleanHTML}</div>
     <div class="cell overall-streak">${overallStreakHTML}</div>
-    <div class="cell repeating">${repeatingHTML}</div>
-    <div class="cell contact">${contactHTML}</div>
-    <div class="cell todo">${todoHTML}</div>
-    <div class="cell birthday">${birthdayHTML}</div>
   `;
 }
 
