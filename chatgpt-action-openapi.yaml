@@ -1,0 +1,87 @@
+openapi: 3.1.0
+info:
+  title: Lyfe Task API
+  version: 1.0.0
+  description: Read due Lyfe tasks and add new tasks.
+servers:
+  - url: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi
+paths:
+  /:
+    get:
+      operationId: getDueTasks
+      summary: Get tasks due on or before a date
+      description: Returns active tasks for an owner that are due on or before the requested date. Use owner Sebo unless the user explicitly asks about Alomi or everyone.
+      parameters:
+        - name: owner
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [Sebo, Alomi, All]
+            default: Sebo
+        - name: through
+          in: query
+          required: false
+          description: Inclusive date in YYYY-MM-DD format. Omit for today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Due tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  owner: { type: string }
+                  through: { type: string }
+                  count: { type: integer }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        type: { type: string, enum: [todo, repeating, contact, birthday] }
+                        name: { type: string }
+                        owner: { type: string }
+                        dueDate: { type: integer }
+                        frequency: { type: integer }
+    post:
+      operationId: addTask
+      summary: Add a task to Lyfe
+      description: Adds exactly one task. For one-off todos and birthdays provide dueDate. For repeating/contact tasks provide frequency in days.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, name]
+              properties:
+                type:
+                  type: string
+                  enum: [todo, repeating, contact, birthday]
+                name:
+                  type: string
+                owner:
+                  type: string
+                  enum: [Sebo, Alomi, All]
+                  default: Sebo
+                dueDate:
+                  type: string
+                  format: date
+                  description: YYYY-MM-DD; required for todo or birthday.
+                frequency:
+                  type: integer
+                  minimum: 1
+                  description: Days between occurrences; required for repeating or contact.
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
