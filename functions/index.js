@@ -128,43 +128,35 @@ async function readDueTasks(owner, throughMidnight) {
   const owners = owner === 'All' ? ['Sebo', 'Alomi', 'All'] : [owner, 'All'];
   const result = [];
 
-  // Repeating/contact due dates are computed fields, so these two small
-  // collections must be read for the requested owner. No extra writes occur.
-  const [repeatingSnap, contactSnap] = await Promise.all([
+  // One owner-filtered query per task collection. This intentionally avoids
+  // composite indexes and never reads another user's private-owner tasks.
+  const [repeatingSnap, contactSnap, todosSnap, birthdaysSnap] = await Promise.all([
     db.collection('repeatingTasks').where('owner', 'in', owners).get(),
-    db.collection('contactTasks').where('owner', 'in', owners).get()
+    db.collection('contactTasks').where('owner', 'in', owners).get(),
+    db.collection('todos').where('owner', 'in', owners).get(),
+    db.collection('birthdays').where('owner', 'in', owners).get()
   ]);
 
   repeatingSnap.forEach(d => {
     const t = d.data();
     const dueDate = t.lastCompleted + t.frequency * ONE_DAY;
-    if (dueDate <= throughMidnight) {
-      result.push({ id: d.id, type: 'repeating', name: t.name, owner: t.owner, dueDate, frequency: t.frequency });
-    }
+    if (dueDate <= throughMidnight) result.push({ id: d.id, type: 'repeating', name: t.name, owner: t.owner, dueDate, frequency: t.frequency });
   });
 
   contactSnap.forEach(d => {
     const t = d.data();
     const dueDate = t.lastContact + t.frequency * ONE_DAY;
-    if (dueDate <= throughMidnight) {
-      result.push({ id: d.id, type: 'contact', name: t.contactName || t.name, owner: t.owner, dueDate, frequency: t.frequency });
-    }
+    if (dueDate <= throughMidnight) result.push({ id: d.id, type: 'contact', name: t.contactName || t.name, owner: t.owner, dueDate, frequency: t.frequency });
   });
-
-  // These collections store dueDate directly, allowing Firestore to filter
-  // before documents are returned/billed as reads.
-  const [todosSnap, birthdaysSnap] = await Promise.all([
-    db.collection('todos').where('owner', 'in', owners).where('dueDate', '<=', throughMidnight).get(),
-    db.collection('birthdays').where('owner', 'in', owners).where('dueDate', '<=', throughMidnight).get()
-  ]);
 
   todosSnap.forEach(d => {
     const t = d.data();
-    result.push({ id: d.id, type: 'todo', name: t.name, owner: t.owner, dueDate: t.dueDate });
+    if (t.dueDate <= throughMidnight) result.push({ id: d.id, type: 'todo', name: t.name, owner: t.owner, dueDate: t.dueDate });
   });
+
   birthdaysSnap.forEach(d => {
     const t = d.data();
-    result.push({ id: d.id, type: 'birthday', name: t.name, owner: t.owner, dueDate: t.dueDate });
+    if (t.dueDate <= throughMidnight) result.push({ id: d.id, type: 'birthday', name: t.name, owner: t.owner, dueDate: t.dueDate });
   });
 
   return result.sort((a, b) => a.dueDate - b.dueDate);
