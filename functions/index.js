@@ -131,7 +131,7 @@ async function sendPushReminders(context) {
 
 const reminderSpecs = [
   { name: 'Morning', cron: '0 7 * * *' },
-  { name: 'Night', cron: '0 22 * * *' }
+  { name: 'Night', cron: '0 20 * * *' }
 ];
 
 for (const spec of reminderSpecs) {
