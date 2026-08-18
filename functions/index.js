@@ -1,100 +1,264 @@
 // functions/index.js
-require('dotenv').config();
-const functions = require('firebase-functions');    // v1 API
-const admin     = require('firebase-admin');
-const twilio    = require('twilio');
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 
 admin.initializeApp();
 const db = admin.firestore();
 
-// Pull creds from process.env (dotenv loads from local .env)
-const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
+const ONE_DAY = 24 * 60 * 60 * 1000;
+const VALID_OWNERS = new Set(['Sebo', 'Alomi', 'All']);
+const VALID_TYPES = new Set(['todo', 'repeating', 'contact', 'birthday']);
+const APP_URL = 'https://ssiatkowski.github.io/lyfe/';
 
-// Helper to collect due‑today & overdue items (includes owner="All")
-async function getAlerts(userId) {
-  // compute “today midnight” in America/Los_Angeles
-  const laNow    = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })
-  );
-  const todayMid = new Date(
-    laNow.getFullYear(),
-    laNow.getMonth(),
-    laNow.getDate()
-  ).getTime();
-
-  const oneDay = 24 * 60 * 60 * 1000;
-  const lists  = { dueToday: [], overdue: [] };
-
-  async function scan(col, tsFn, label) {
-    // include tasks owned by this user OR by "All"
-    const snap = await db.collection(col)
-      .where('owner', 'in', [userId, 'All'])
-      .get();
-    snap.forEach(d => {
-      const data = d.data();
-      const due  = tsFn(data);
-      if (due < todayMid)               lists.overdue.push(data[label]);
-      else if (due < todayMid + oneDay) lists.dueToday.push(data[label]);
-    });
-  }
-
-  await scan('repeatingTasks', t => t.lastCompleted + t.frequency * oneDay, 'name');
-  await scan('contactTasks',   t => t.lastContact  + t.frequency * oneDay, 'contactName');
-  await scan('todos',          t => t.dueDate,                              'name');
-  await scan('birthdays',      t => t.dueDate,                              'name');
-
-  return lists;
+function pacificDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
-// Send one WhatsApp message with custom opening
-async function sendMsg(userDoc, context) {
-  const name = userDoc.data().name;
+function dateStringForTimestamp(timestamp) {
+  return pacificDateString(new Date(timestamp));
+}
 
-  // SKIP Alomi for now – remove this `if` to re‑enable for Alomi
-  if (name === 'Alomi') return;
+function dateStringToSafeTimestamp(dateString) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString || '')) return NaN;
+  const timestamp = Date.parse(`${dateString}T12:00:00Z`);
+  return Number.isFinite(timestamp) ? timestamp : NaN;
+}
 
-  const { dueToday, overdue } = await getAlerts(userDoc.id);
-  if (!dueToday.length && !overdue.length) return;
-
-  let body = '';
-  if (context === 'Morning') {
-    body += `*🌅 Good Morning, ${name}!*`;
-  } else if (context === 'Night') {
-    body += `*🌃 Oops, you forgot to check off some tasks, ${name}!*`;
+function taskDueTimestamp(collectionName, task) {
+  if (collectionName === 'repeatingTasks') {
+    return task.lastCompleted + task.frequency * ONE_DAY;
   }
+  if (collectionName === 'contactTasks') {
+    return task.lastContact + task.frequency * ONE_DAY;
+  }
+  return task.dueDate;
+}
 
-  if (dueToday.length) body += `\n\n*Due Today:*\n• ${dueToday.join('\n• ')}`;
-  if (overdue.length)  body += `\n\n*Overdue:*\n• ${overdue.join('\n• ')}`;
+function taskDisplayName(collectionName, task) {
+  return collectionName === 'contactTasks' ? (task.contactName || task.name) : task.name;
+}
 
-  // link to your app
-  body += `\n\n🔗 Open Lyfe: https://ssiatkowski.github.io/lyfe/`;
+//////////////////////////////////////////////////
+// PWA push reminders
+//
+// Reads occur only at the two scheduled reminder times. Each run first reads
+// the small subscription collection and exits immediately if no devices are
+// subscribed. With subscriptions present, it makes one filtered query against
+// each of the four task collections. Sending notifications causes no Firestore
+// writes.
+//////////////////////////////////////////////////
+async function sendPushReminders(context) {
+  const subscriptionsSnap = await db.collection('notificationSubscriptions').get();
+  if (subscriptionsSnap.empty) return null;
 
-  await client.messages.create({
-    from: `whatsapp:${process.env.TWILIO_WHATSAPP}`,  // e.g. 'whatsapp:+123456789'
-    to:   `whatsapp:${userDoc.data().whatsapp}`,
-    body
+  const tokensByOwner = new Map();
+  subscriptionsSnap.forEach(docSnap => {
+    const { owner, token } = docSnap.data();
+    if (!VALID_OWNERS.has(owner) || owner === 'All' || !token) return;
+    if (!tokensByOwner.has(owner)) tokensByOwner.set(owner, []);
+    tokensByOwner.get(owner).push(token);
   });
+  if (!tokensByOwner.size) return null;
+
+  const owners = [...tokensByOwner.keys()];
+  const queryOwners = [...new Set([...owners, 'All'])];
+  const collections = ['repeatingTasks', 'contactTasks', 'todos', 'birthdays'];
+  const snapshots = await Promise.all(
+    collections.map(name => db.collection(name).where('owner', 'in', queryOwners).get())
+  );
+
+  const today = pacificDateString();
+  const alertsByOwner = new Map(owners.map(owner => [owner, { dueToday: [], overdue: [] }]));
+
+  snapshots.forEach((snapshot, index) => {
+    const collectionName = collections[index];
+    snapshot.forEach(docSnap => {
+      const task = docSnap.data();
+      const dueTimestamp = taskDueTimestamp(collectionName, task);
+      if (!Number.isFinite(dueTimestamp)) return;
+
+      const dueDate = dateStringForTimestamp(dueTimestamp);
+      if (dueDate > today) return;
+
+      const recipients = task.owner === 'All' ? owners : [task.owner];
+      const bucketName = dueDate < today ? 'overdue' : 'dueToday';
+      const name = taskDisplayName(collectionName, task);
+
+      recipients.forEach(owner => {
+        const alerts = alertsByOwner.get(owner);
+        if (alerts && name) alerts[bucketName].push(name);
+      });
+    });
+  });
+
+  const sends = [];
+  for (const [owner, tokens] of tokensByOwner.entries()) {
+    const alerts = alertsByOwner.get(owner);
+    if (!alerts || (!alerts.dueToday.length && !alerts.overdue.length)) continue;
+
+    const total = alerts.dueToday.length + alerts.overdue.length;
+    const pieces = [];
+    if (alerts.overdue.length) pieces.push(`${alerts.overdue.length} overdue`);
+    if (alerts.dueToday.length) pieces.push(`${alerts.dueToday.length} due today`);
+
+    const title = context === 'Morning'
+      ? `Lyfe: ${total} task${total === 1 ? '' : 's'} need attention`
+      : `Lyfe: ${total} task${total === 1 ? '' : 's'} remaining`;
+
+    sends.push(admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title,
+        body: pieces.join(' · ')
+      },
+      webpush: {
+        fcmOptions: {
+          link: `${APP_URL}?user=${encodeURIComponent(owner)}`
+        }
+      }
+    }));
+  }
+
+  return Promise.all(sends);
 }
 
-// Broadcast to all users
-async function broadcast(context) {
-  const users = await db.collection('users').get();
-  await Promise.all(users.docs.map(doc => sendMsg(doc, context)));
-}
-
-// Now only two schedules: Morning at 7 AM, Night at 10 PM Pacific
-const specs = [
-  { name: 'Morning', cron: '0 7 * * *'  },  // 7AM PT
-  { name: 'Night',   cron: '0 22 * * *' }   // 10PM PT
+const reminderSpecs = [
+  { name: 'Morning', cron: '0 7 * * *' },
+  { name: 'Night', cron: '0 22 * * *' }
 ];
 
-for (const s of specs) {
-  exports[`whatsapp${s.name}`] = functions
+for (const spec of reminderSpecs) {
+  exports[`push${spec.name}`] = functions
     .region('us-west2')
     .pubsub
-    .schedule(s.cron)
+    .schedule(spec.cron)
     .timeZone('America/Los_Angeles')
-    .onRun(async () => {
-      await broadcast(s.name);
-    });
+    .onRun(() => sendPushReminders(spec.name));
 }
+
+//////////////////////////////////////////////////
+// Minimal ChatGPT API
+//
+// Deliberately isolated from the web app. It performs Firestore work only
+// when called: no listeners, polling, scheduled work, or background reads.
+//////////////////////////////////////////////////
+async function readDueTasks(owner, throughDate) {
+  const owners = owner === 'All' ? ['Sebo', 'Alomi', 'All'] : [owner, 'All'];
+  const result = [];
+  const collections = ['repeatingTasks', 'contactTasks', 'todos', 'birthdays'];
+
+  const snapshots = await Promise.all(
+    collections.map(name => db.collection(name).where('owner', 'in', owners).get())
+  );
+
+  snapshots.forEach((snapshot, index) => {
+    const collectionName = collections[index];
+    snapshot.forEach(docSnap => {
+      const task = docSnap.data();
+      const dueTimestamp = taskDueTimestamp(collectionName, task);
+      if (!Number.isFinite(dueTimestamp)) return;
+      if (dateStringForTimestamp(dueTimestamp) > throughDate) return;
+
+      const type = collectionName === 'repeatingTasks'
+        ? 'repeating'
+        : collectionName === 'contactTasks'
+          ? 'contact'
+          : collectionName === 'todos'
+            ? 'todo'
+            : 'birthday';
+
+      const item = {
+        id: docSnap.id,
+        type,
+        name: taskDisplayName(collectionName, task),
+        owner: task.owner,
+        dueDate: dueTimestamp
+      };
+      if (task.frequency) item.frequency = task.frequency;
+      result.push(item);
+    });
+  });
+
+  return result.sort((a, b) => a.dueDate - b.dueDate);
+}
+
+exports.taskApi = functions.region('us-west2').https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  try {
+    if (req.method === 'GET') {
+      const owner = req.query.owner || 'Sebo';
+      if (!VALID_OWNERS.has(owner)) return res.status(400).json({ error: 'Invalid owner' });
+
+      const through = req.query.through || pacificDateString();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(through)) {
+        return res.status(400).json({ error: 'through must be YYYY-MM-DD' });
+      }
+
+      const tasks = await readDueTasks(owner, through);
+      return res.json({ owner, through, count: tasks.length, tasks });
+    }
+
+    if (req.method === 'POST') {
+      const { type, name, owner = 'Sebo', dueDate, frequency } = req.body || {};
+      if (!VALID_TYPES.has(type)) return res.status(400).json({ error: 'Invalid type' });
+      if (!VALID_OWNERS.has(owner)) return res.status(400).json({ error: 'Invalid owner' });
+      if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name is required' });
+
+      let collectionName;
+      let data;
+      const todayTimestamp = dateStringToSafeTimestamp(pacificDateString());
+
+      if (type === 'todo' || type === 'birthday') {
+        const due = dateStringToSafeTimestamp(dueDate);
+        if (!Number.isFinite(due)) return res.status(400).json({ error: 'dueDate must be YYYY-MM-DD' });
+        collectionName = type === 'todo' ? 'todos' : 'birthdays';
+        data = { owner, name: name.trim(), dueDate: due, type };
+      } else {
+        const freq = Number(frequency);
+        if (!Number.isInteger(freq) || freq < 1) {
+          return res.status(400).json({ error: 'frequency must be a positive integer' });
+        }
+        if (type === 'repeating') {
+          collectionName = 'repeatingTasks';
+          data = {
+            owner,
+            name: name.trim(),
+            frequency: freq,
+            lastCompleted: todayTimestamp,
+            streak: 0,
+            type: 'repeating'
+          };
+        } else {
+          collectionName = 'contactTasks';
+          data = {
+            owner,
+            contactName: name.trim(),
+            frequency: freq,
+            lastContact: todayTimestamp,
+            streak: 0,
+            type: 'contact'
+          };
+        }
+      }
+
+      const ref = await db.collection(collectionName).add(data);
+      return res.status(201).json({ id: ref.id, ...data });
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (err) {
+    console.error('taskApi error', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});

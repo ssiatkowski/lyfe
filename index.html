@@ -4,10 +4,22 @@
   <meta charset="UTF-8" />
   <!-- Prevent mobile zooming on inputs -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Lyfe</title>
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="style.css" />
   <!-- Google Fonts for a modern look -->
   <link href="https://fonts.googleapis.com/css?family=Roboto:400,500&display=swap" rel="stylesheet">
+  <script>
+    // Optional future shortcut support: /lyfe/?user=Sebo or /lyfe/?user=Alomi.
+    // This runs before the app initializes so all existing views use the requested user.
+    const requestedUser = new URLSearchParams(window.location.search).get("user");
+    if (["Sebo", "Alomi", "All"].includes(requestedUser)) {
+      localStorage.setItem("currentUser", requestedUser);
+    }
+  </script>
 </head>
 <body>
   <!-- Main App Container -->
@@ -123,7 +135,7 @@
   <!-- Edit Modal -->
   <div id="edit-modal" class="modal" style="display: none;">
     <div class="modal-content">
-      <h2 id="edit-modal-title"></h2>
+      <h2 id="edit-modal-title">Edit Task</h2>
       <form id="edit-form">
         <div id="edit-fields"></div>
         <button type="submit">Save</button>
@@ -135,7 +147,9 @@
   <!-- Firebase SDKs (Modular) -->
   <script type="module" src="https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js"></script>
   <script type="module" src="https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js"></script>
-  <!-- Our App Script -->
+  <!-- Existing app functionality -->
   <script type="module" src="script.js"></script>
+  <!-- PWA/push functionality is isolated from the existing task code -->
+  <script type="module" src="pwa.js"></script>
 </body>
 </html>
