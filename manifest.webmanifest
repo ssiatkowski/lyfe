@@ -1,0 +1,11 @@
+{
+  "id": "/lyfe/",
+  "name": "Lyfe",
+  "short_name": "Lyfe",
+  "start_url": "/lyfe/",
+  "scope": "/lyfe/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "description": "Personal task and reminder tracker"
+}
