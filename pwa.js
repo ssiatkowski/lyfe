@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
-import { getFirestore, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
-import { getMessaging, getToken, deleteToken, isSupported, onMessage } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-messaging.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
+import { getMessaging, getToken, isSupported, onMessage } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-messaging.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC_BtuwYiwwmDpAJQuRt4x30YyPGTYvZ7s",
@@ -42,6 +42,8 @@ function setButtonState(text, disabled = false) {
 }
 
 async function saveSubscription(token, owner) {
+  // Stable document ID means token refreshes or owner switches overwrite the
+  // same device record instead of accumulating stale subscriptions/writes.
   await setDoc(doc(db, "notificationSubscriptions", getDeviceId()), {
     token,
     owner,
@@ -58,9 +60,10 @@ async function syncNotificationOwner() {
   }
 
   try {
-    const token = await getToken(messaging, {
-      serviceWorkerRegistration
-    });
+    // Firebase supplies a default VAPID key when one is not passed. If a
+    // browser later requires a project-specific key, this is the only call
+    // that needs the optional vapidKey setting added.
+    const token = await getToken(messaging, { serviceWorkerRegistration });
     if (token) {
       await saveSubscription(token, owner);
       setButtonState(`Notifications: ${owner}`);
@@ -126,9 +129,9 @@ async function initializeNotifications() {
   }
 
   onMessage(messaging, payload => {
-    if (!payload.notification) return;
+    if (!payload.notification || !serviceWorkerRegistration) return;
     const { title, body } = payload.notification;
-    if (title) new Notification(title, { body });
+    if (title) serviceWorkerRegistration.showNotification(title, { body });
   });
 }
 
