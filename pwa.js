@@ -22,6 +22,7 @@ const DEVICE_ID_KEY = "lyfeNotificationDeviceId";
 let messaging = null;
 let serviceWorkerRegistration = null;
 let notificationButton = null;
+let notificationStatus = null;
 
 function getCurrentOwner() {
   const owner = localStorage.getItem("currentUser");
@@ -43,6 +44,19 @@ function setButtonState(text, disabled = false) {
   notificationButton.disabled = disabled;
 }
 
+function setStatus(text = "") {
+  if (!notificationStatus) return;
+  notificationStatus.textContent = text;
+  notificationStatus.style.display = text ? "block" : "none";
+}
+
+function formatError(err) {
+  const code = err?.code ? String(err.code) : "";
+  const message = err?.message ? String(err.message) : "";
+  if (code && message && !message.includes(code)) return `${code}: ${message}`;
+  return code || message || String(err) || "Unknown notification error";
+}
+
 async function saveSubscription(token, owner) {
   // Stable document ID means token refreshes or owner switches overwrite the
   // same device record instead of accumulating stale subscriptions/writes.
@@ -58,21 +72,26 @@ async function syncNotificationOwner() {
   const owner = getCurrentOwner();
   if (!owner) {
     setButtonState("Select Sebo or Alomi", true);
+    setStatus("Notifications are tied to one specific user, not All.");
     return;
   }
 
   try {
+    setStatus("");
     const token = await getToken(messaging, {
       serviceWorkerRegistration,
       vapidKey: VAPID_KEY
     });
-    if (token) {
-      await saveSubscription(token, owner);
-      setButtonState(`Notifications: ${owner}`);
-    }
+    if (!token) throw new Error("Firebase did not return a messaging token");
+
+    await saveSubscription(token, owner);
+    setButtonState(`Notifications: ${owner}`);
+    setStatus("Registered successfully.");
   } catch (err) {
     console.error("Unable to sync notification subscription", err);
-    setButtonState("Notifications unavailable");
+    const detail = formatError(err);
+    setButtonState("Retry Notifications");
+    setStatus(detail);
   }
 }
 
@@ -80,25 +99,37 @@ async function enableNotifications() {
   const owner = getCurrentOwner();
   if (!owner) {
     setButtonState("Select Sebo or Alomi", true);
+    setStatus("Choose Sebo or Alomi first.");
     return;
   }
 
   setButtonState("Enabling…", true);
+  setStatus("");
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
       setButtonState("Enable Notifications");
+      setStatus(`Notification permission is ${permission}.`);
       return;
     }
     await syncNotificationOwner();
+  } catch (err) {
+    console.error("Unable to enable notifications", err);
+    setButtonState("Retry Notifications");
+    setStatus(formatError(err));
   } finally {
     if (notificationButton) notificationButton.disabled = false;
   }
 }
 
-function installNotificationButton() {
+function installNotificationControls() {
   const userSelector = document.querySelector(".user-selector");
   if (!userSelector) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.id = "notification-controls";
+  wrapper.style.marginTop = "6px";
+  wrapper.style.textAlign = "center";
 
   notificationButton = document.createElement("button");
   notificationButton.type = "button";
@@ -106,20 +137,43 @@ function installNotificationButton() {
   notificationButton.textContent = Notification.permission === "granted"
     ? "Notifications enabled"
     : "Enable Notifications";
-  notificationButton.style.marginLeft = "8px";
   notificationButton.addEventListener("click", enableNotifications);
-  userSelector.appendChild(notificationButton);
+
+  notificationStatus = document.createElement("small");
+  notificationStatus.id = "notification-status";
+  notificationStatus.style.display = "none";
+  notificationStatus.style.marginTop = "4px";
+  notificationStatus.style.maxWidth = "360px";
+  notificationStatus.style.overflowWrap = "anywhere";
+
+  wrapper.appendChild(notificationButton);
+  wrapper.appendChild(notificationStatus);
+  userSelector.appendChild(wrapper);
 }
 
 async function initializeNotifications() {
   if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
-  if (!(await isSupported())) return;
 
-  serviceWorkerRegistration = await navigator.serviceWorker.register("./firebase-messaging-sw.js", {
-    scope: "./"
-  });
-  messaging = getMessaging(app);
-  installNotificationButton();
+  installNotificationControls();
+
+  const supported = await isSupported();
+  if (!supported) {
+    setButtonState("Notifications unsupported", true);
+    setStatus("Firebase Messaging reports that this browser/app context does not support web push.");
+    return;
+  }
+
+  try {
+    serviceWorkerRegistration = await navigator.serviceWorker.register("./firebase-messaging-sw.js", {
+      scope: "./"
+    });
+    messaging = getMessaging(app);
+  } catch (err) {
+    console.error("PWA notification initialization failed", err);
+    setButtonState("Retry Notifications");
+    setStatus(formatError(err));
+    return;
+  }
 
   const userSelect = document.getElementById("user-select");
   userSelect?.addEventListener("change", () => {
@@ -140,5 +194,7 @@ async function initializeNotifications() {
 window.addEventListener("DOMContentLoaded", () => {
   initializeNotifications().catch(err => {
     console.error("PWA notification initialization failed", err);
+    setButtonState("Retry Notifications");
+    setStatus(formatError(err));
   });
 });
