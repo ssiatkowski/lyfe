@@ -1,24 +1,19 @@
 openapi: 3.1.0
 info:
   title: Lyfe Task API
-  version: 1.0.0
-  description: Read due Lyfe tasks and add new tasks.
+  version: 1.1.0
+  description: Read, add, and modify Lyfe tasks. Delete is intentionally unsupported.
 servers:
   - url: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi
+security:
+  - LyfeApiKey: []
 paths:
   /:
     get:
       operationId: getDueTasks
       summary: Get tasks due on or before a date
-      description: Returns active tasks for an owner that are due on or before the requested date. Use owner Sebo unless the user explicitly asks about Alomi or everyone.
+      description: Returns tasks for the authenticated person plus shared All tasks. Do not call repeatedly unless the user asks for refreshed data.
       parameters:
-        - name: owner
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [Sebo, Alomi, All]
-            default: Sebo
         - name: through
           in: query
           required: false
@@ -50,8 +45,8 @@ paths:
                         frequency: { type: integer }
     post:
       operationId: addTask
-      summary: Add a task to Lyfe
-      description: Adds exactly one task. For one-off todos and birthdays provide dueDate. For repeating/contact tasks provide frequency in days.
+      summary: Add one task
+      description: Adds exactly one task. Use owner self unless the user explicitly says the task is shared.
       requestBody:
         required: true
         content:
@@ -67,8 +62,8 @@ paths:
                   type: string
                 owner:
                   type: string
-                  enum: [Sebo, Alomi, All]
-                  default: Sebo
+                  enum: [self, All]
+                  default: self
                 dueDate:
                   type: string
                   format: date
@@ -85,3 +80,47 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+    patch:
+      operationId: modifyTask
+      summary: Modify one existing task
+      description: Modify name, owner, due date, or frequency. Never delete tasks. Identify the task using an id returned by getDueTasks; if ambiguous, read once and ask the user rather than guessing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, type]
+              properties:
+                id:
+                  type: string
+                type:
+                  type: string
+                  enum: [todo, repeating, contact, birthday]
+                name:
+                  type: string
+                owner:
+                  type: string
+                  enum: [self, All]
+                dueDate:
+                  type: string
+                  format: date
+                  description: YYYY-MM-DD; valid only for todo or birthday.
+                frequency:
+                  type: integer
+                  minimum: 1
+                  description: Valid only for repeating or contact.
+      responses:
+        '200':
+          description: Task modified
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+components:
+  securitySchemes:
+    LyfeApiKey:
+      type: apiKey
+      in: header
+      name: X-Lyfe-Key
