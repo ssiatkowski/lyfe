@@ -50,16 +50,47 @@ function setStatus(text = "") {
   notificationStatus.style.display = text ? "block" : "none";
 }
 
+function safeJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function formatError(err) {
+  const parts = [];
   const code = err?.code ? String(err.code) : "";
   const message = err?.message ? String(err.message) : "";
-  if (code && message && !message.includes(code)) return `${code}: ${message}`;
-  return code || message || String(err) || "Unknown notification error";
+  const customData = err?.customData || {};
+
+  if (code) parts.push(`code=${code}`);
+  if (customData.requestName) parts.push(`request=${customData.requestName}`);
+  if (customData.serverCode !== undefined) parts.push(`serverCode=${customData.serverCode}`);
+  if (customData.serverStatus) parts.push(`serverStatus=${customData.serverStatus}`);
+  if (customData.serverMessage) parts.push(`serverMessage=${customData.serverMessage}`);
+
+  if (message) {
+    const compactMessage = message.replace(/^Firebase:\s*/i, "").trim();
+    if (!parts.some(p => compactMessage.includes(p.split("=")[1]))) {
+      parts.push(`message=${compactMessage}`);
+    }
+  }
+
+  const remainingCustomData = { ...customData };
+  delete remainingCustomData.requestName;
+  delete remainingCustomData.serverCode;
+  delete remainingCustomData.serverStatus;
+  delete remainingCustomData.serverMessage;
+  if (Object.keys(remainingCustomData).length) {
+    parts.push(`customData=${safeJson(remainingCustomData)}`);
+  }
+
+  if (!parts.length) parts.push(String(err) || "Unknown notification error");
+  return parts.join(" | ");
 }
 
 async function saveSubscription(token, owner) {
-  // Stable document ID means token refreshes or owner switches overwrite the
-  // same device record instead of accumulating stale subscriptions/writes.
   await setDoc(doc(db, "notificationSubscriptions", getDeviceId()), {
     token,
     owner,
@@ -89,6 +120,13 @@ async function syncNotificationOwner() {
     setStatus("Registered successfully.");
   } catch (err) {
     console.error("Unable to sync notification subscription", err);
+    console.error("Notification diagnostic payload", {
+      code: err?.code,
+      message: err?.message,
+      customData: err?.customData,
+      name: err?.name,
+      stack: err?.stack
+    });
     const detail = formatError(err);
     setButtonState("Retry Notifications");
     setStatus(detail);
@@ -143,8 +181,9 @@ function installNotificationControls() {
   notificationStatus.id = "notification-status";
   notificationStatus.style.display = "none";
   notificationStatus.style.marginTop = "4px";
-  notificationStatus.style.maxWidth = "360px";
+  notificationStatus.style.maxWidth = "420px";
   notificationStatus.style.overflowWrap = "anywhere";
+  notificationStatus.style.whiteSpace = "normal";
 
   wrapper.appendChild(notificationButton);
   wrapper.appendChild(notificationStatus);
