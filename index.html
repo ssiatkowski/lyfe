@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- Prevent mobile zooming on inputs -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#ffffff" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -10,112 +9,73 @@
   <title>Lyfe</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="style.css" />
-  <!-- Google Fonts for a modern look -->
   <link href="https://fonts.googleapis.com/css?family=Roboto:400,500&display=swap" rel="stylesheet">
   <script>
-    // Explicit URL selection is authoritative for shortcuts/home-screen launches.
-    // Supported examples: ?user=Sebo, ?user=Sebastian, ?user=Alomi (case-insensitive).
     const rawRequestedUser = new URLSearchParams(window.location.search).get("user");
     if (rawRequestedUser) {
       const normalized = rawRequestedUser.trim().toLowerCase();
-      const userAliases = {
-        sebo: "Sebo",
-        sebastian: "Sebo",
-        alomi: "Alomi",
-        all: "All"
-      };
+      const userAliases = { sebo: "Sebo", sebastian: "Sebo", alomi: "Alomi", all: "All" };
       const requestedUser = userAliases[normalized];
-      if (requestedUser) {
-        localStorage.setItem("currentUser", requestedUser);
-      }
+      if (requestedUser) localStorage.setItem("currentUser", requestedUser);
     }
   </script>
 </head>
 <body>
-  <!-- Main App Container -->
   <div id="app-container" class="app-container">
     <header class="header">
       <h1>Lyfe</h1>
-      <div class="user-selector">
-        <label for="user-select">Current User:</label>
-        <select id="user-select"></select>
+      <div class="header-actions">
+        <div class="user-selector">
+          <label for="user-select">User</label>
+          <select id="user-select"></select>
+        </div>
+        <button type="button" id="stats-btn" class="header-icon-btn" aria-label="View stats" title="Stats">Stats</button>
       </div>
     </header>
 
-    <div id="scoreboard"></div>
-
-    <!-- Navigation Bar for Task Types -->
     <nav id="nav-bar">
-      <button data-type="repeating" class="active">Repeating Tasks</button>
+      <button data-type="repeating" class="active">Repeating</button>
       <button data-type="contact">Keep in Touch</button>
-      <button data-type="todos">One-off Todos</button>
-      <button data-type="birthdays">Birthdays / Occasions</button>
-      <button data-type="calendar">Calendar View</button>
+      <button data-type="todos">Todos</button>
+      <button data-type="birthdays">Occasions</button>
+      <button data-type="calendar">Calendar</button>
     </nav>
 
     <div class="container">
-
-      <!-- Standard Columns Container -->
       <div id="columns-container" class="columns">
-
-        <!-- Repeating Tasks Column -->
         <div class="column" id="repeating-column">
-          <h2>Repeating Tasks</h2>
-          <form id="repeating-form" class="task-form">
-            <input type="text" id="r-task-name" placeholder="Task Name" required>
-            <input type="number" id="r-frequency" placeholder="Frequency (days)" min="1" required>
-            <label>Owner:</label>
-            <select id="r-owner"></select>
-            <button type="submit">Add Task</button>
-          </form>
+          <div class="column-heading-row">
+            <h2>Repeating Tasks</h2>
+            <button type="button" class="add-task-btn" data-add-type="repeating">+ Add</button>
+          </div>
           <div id="repeating-list" class="task-list"></div>
         </div>
 
-        <!-- Keep in Touch Column -->
         <div class="column" id="contacts-column">
-          <h2>Keep in Touch</h2>
-          <form id="contacts-form" class="task-form">
-            <input type="text" id="c-contact-name" placeholder="Contact Name" required>
-            <input type="number" id="c-frequency" placeholder="Frequency (days)" min="1" required>
-            <label>Owner:</label>
-            <select id="c-owner"></select>
-            <button type="submit">Add Contact Task</button>
-          </form>
+          <div class="column-heading-row">
+            <h2>Keep in Touch</h2>
+            <button type="button" class="add-task-btn" data-add-type="contact">+ Add</button>
+          </div>
           <div id="contacts-list" class="task-list"></div>
         </div>
 
-        <!-- One-off Todos Column -->
         <div class="column" id="todos-column">
-          <h2>One-off Todos</h2>
-          <form id="todos-form" class="task-form">
-            <input type="text" id="t-task-name" placeholder="Task Name" required>
-            <label>Due Date:</label>
-            <input type="date" id="t-due-date" required>
-            <br>
-            <label>Owner:</label>
-            <select id="t-owner"></select>
-            <button type="submit">Add Todo</button>
-          </form>
+          <div class="column-heading-row">
+            <h2>One-off Todos</h2>
+            <button type="button" class="add-task-btn" data-add-type="todos">+ Add</button>
+          </div>
           <div id="todos-list" class="task-list"></div>
         </div>
 
-        <!-- Birthdays/Occasions Column -->
         <div class="column" id="birthdays-column">
-          <h2>Birthdays/Occasions</h2>
-          <form id="birthdays-form" class="task-form">
-            <input type="text" id="b-task-name" placeholder="Occasion Name" required>
-            <label>Date:</label>
-            <input type="date" id="b-date" required>
-            <br>
-            <label>Owner:</label>
-            <select id="b-owner"></select>
-            <button type="submit">Add Occasion</button>
-          </form>
+          <div class="column-heading-row">
+            <h2>Birthdays/Occasions</h2>
+            <button type="button" class="add-task-btn" data-add-type="birthdays">+ Add</button>
+          </div>
           <div id="birthdays-list" class="task-list"></div>
         </div>
       </div>
 
-      <!-- Calendar View Container -->
       <div id="calendar-view" style="display: none;">
         <div class="calendar-controls">
           <button id="prev-month">Previous</button>
@@ -123,26 +83,69 @@
           <button id="next-month">Next</button>
         </div>
         <div class="calendar-filters">
-          <label class="calendar-filter-label calendar-repeating">
-            <input type="checkbox" class="calendar-filter" value="repeating" checked> Repeating
-          </label>
-          <label class="calendar-filter-label calendar-contact">
-            <input type="checkbox" class="calendar-filter" value="contact" checked> Keep in Touch
-          </label>
-          <label class="calendar-filter-label calendar-todo">
-            <input type="checkbox" class="calendar-filter" value="todo" checked> One-off Todo
-          </label>
-          <label class="calendar-filter-label calendar-birthday">
-            <input type="checkbox" class="calendar-filter" value="birthday" checked> Birthday/Occasion
-          </label>
+          <label class="calendar-filter-label calendar-repeating"><input type="checkbox" class="calendar-filter" value="repeating" checked> Repeating</label>
+          <label class="calendar-filter-label calendar-contact"><input type="checkbox" class="calendar-filter" value="contact" checked> Keep in Touch</label>
+          <label class="calendar-filter-label calendar-todo"><input type="checkbox" class="calendar-filter" value="todo" checked> Todo</label>
+          <label class="calendar-filter-label calendar-birthday"><input type="checkbox" class="calendar-filter" value="birthday" checked> Occasion</label>
         </div>
         <div id="calendar-grid"></div>
       </div>
-
     </div>
   </div>
 
-  <!-- Edit Modal -->
+  <div id="add-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-heading-row">
+        <h2 id="add-modal-title">Add Task</h2>
+        <button type="button" id="add-modal-close" class="modal-close-btn" aria-label="Close">×</button>
+      </div>
+
+      <form id="repeating-form" class="task-form add-modal-form" data-add-form="repeating">
+        <input type="text" id="r-task-name" placeholder="Task Name" required>
+        <input type="number" id="r-frequency" placeholder="Frequency (days)" min="1" required>
+        <label>Owner</label>
+        <select id="r-owner"></select>
+        <button type="submit">Add Task</button>
+      </form>
+
+      <form id="contacts-form" class="task-form add-modal-form" data-add-form="contact">
+        <input type="text" id="c-contact-name" placeholder="Contact Name" required>
+        <input type="number" id="c-frequency" placeholder="Frequency (days)" min="1" required>
+        <label>Owner</label>
+        <select id="c-owner"></select>
+        <button type="submit">Add Contact Task</button>
+      </form>
+
+      <form id="todos-form" class="task-form add-modal-form" data-add-form="todos">
+        <input type="text" id="t-task-name" placeholder="Task Name" required>
+        <label>Due Date</label>
+        <input type="date" id="t-due-date" required>
+        <label>Owner</label>
+        <select id="t-owner"></select>
+        <button type="submit">Add Todo</button>
+      </form>
+
+      <form id="birthdays-form" class="task-form add-modal-form" data-add-form="birthdays">
+        <input type="text" id="b-task-name" placeholder="Occasion Name" required>
+        <label>Date</label>
+        <input type="date" id="b-date" required>
+        <label>Owner</label>
+        <select id="b-owner"></select>
+        <button type="submit">Add Occasion</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="stats-modal" class="modal" style="display: none;">
+    <div class="modal-content stats-modal-content">
+      <div class="modal-heading-row">
+        <h2>Stats</h2>
+        <button type="button" id="stats-modal-close" class="modal-close-btn" aria-label="Close">×</button>
+      </div>
+      <div id="scoreboard"></div>
+    </div>
+  </div>
+
   <div id="edit-modal" class="modal" style="display: none;">
     <div class="modal-content">
       <h2 id="edit-modal-title">Edit Task</h2>
@@ -154,12 +157,10 @@
     </div>
   </div>
 
-  <!-- Firebase SDKs (Modular) -->
   <script type="module" src="https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js"></script>
   <script type="module" src="https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js"></script>
-  <!-- Existing app functionality -->
   <script type="module" src="script.js"></script>
-  <!-- PWA/push functionality is isolated from the existing task code -->
   <script type="module" src="pwa.js"></script>
+  <script src="ui.js"></script>
 </body>
 </html>
