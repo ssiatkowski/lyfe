@@ -12,6 +12,8 @@ const firebaseConfig = {
   measurementId: "G-WE8CC23QSC"
 };
 
+const VAPID_KEY = "BBWG6zMC5ezp6GeYGTw61llTBO97hfSoCxN0J_0vLlf5taCHnTZVpvCPlGu3B_Vx4_cIgkiBHuXtOehKc6DffT4";
+
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const VALID_NOTIFICATION_OWNERS = new Set(["Sebo", "Alomi"]);
@@ -60,10 +62,10 @@ async function syncNotificationOwner() {
   }
 
   try {
-    // Firebase supplies a default VAPID key when one is not passed. If a
-    // browser later requires a project-specific key, this is the only call
-    // that needs the optional vapidKey setting added.
-    const token = await getToken(messaging, { serviceWorkerRegistration });
+    const token = await getToken(messaging, {
+      serviceWorkerRegistration,
+      vapidKey: VAPID_KEY
+    });
     if (token) {
       await saveSubscription(token, owner);
       setButtonState(`Notifications: ${owner}`);
