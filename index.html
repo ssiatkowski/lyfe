@@ -13,11 +13,21 @@
   <!-- Google Fonts for a modern look -->
   <link href="https://fonts.googleapis.com/css?family=Roboto:400,500&display=swap" rel="stylesheet">
   <script>
-    // Optional future shortcut support: /lyfe/?user=Sebo or /lyfe/?user=Alomi.
-    // This runs before the app initializes so all existing views use the requested user.
-    const requestedUser = new URLSearchParams(window.location.search).get("user");
-    if (["Sebo", "Alomi", "All"].includes(requestedUser)) {
-      localStorage.setItem("currentUser", requestedUser);
+    // Explicit URL selection is authoritative for shortcuts/home-screen launches.
+    // Supported examples: ?user=Sebo, ?user=Sebastian, ?user=Alomi (case-insensitive).
+    const rawRequestedUser = new URLSearchParams(window.location.search).get("user");
+    if (rawRequestedUser) {
+      const normalized = rawRequestedUser.trim().toLowerCase();
+      const userAliases = {
+        sebo: "Sebo",
+        sebastian: "Sebo",
+        alomi: "Alomi",
+        all: "All"
+      };
+      const requestedUser = userAliases[normalized];
+      if (requestedUser) {
+        localStorage.setItem("currentUser", requestedUser);
+      }
     }
   </script>
 </head>
