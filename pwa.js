@@ -23,6 +23,7 @@ let messaging = null;
 let serviceWorkerRegistration = null;
 let notificationButton = null;
 let notificationStatus = null;
+let statusTimer = null;
 
 function getCurrentOwner() {
   const owner = localStorage.getItem("currentUser");
@@ -38,56 +39,35 @@ function getDeviceId() {
   return id;
 }
 
-function setButtonState(text, disabled = false) {
+function setButtonState(text, disabled = false, title = "") {
   if (!notificationButton) return;
   notificationButton.textContent = text;
   notificationButton.disabled = disabled;
+  if (title) notificationButton.title = title;
 }
 
-function setStatus(text = "") {
+function setStatus(text = "", autoHideMs = 0) {
   if (!notificationStatus) return;
+  clearTimeout(statusTimer);
   notificationStatus.textContent = text;
   notificationStatus.style.display = text ? "block" : "none";
-}
-
-function safeJson(value) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
+  if (text && autoHideMs) {
+    statusTimer = setTimeout(() => {
+      notificationStatus.style.display = "none";
+    }, autoHideMs);
   }
 }
 
 function formatError(err) {
   const parts = [];
-  const code = err?.code ? String(err.code) : "";
-  const message = err?.message ? String(err.message) : "";
-  const customData = err?.customData || {};
-
-  if (code) parts.push(`code=${code}`);
-  if (customData.requestName) parts.push(`request=${customData.requestName}`);
-  if (customData.serverCode !== undefined) parts.push(`serverCode=${customData.serverCode}`);
-  if (customData.serverStatus) parts.push(`serverStatus=${customData.serverStatus}`);
-  if (customData.serverMessage) parts.push(`serverMessage=${customData.serverMessage}`);
-
-  if (message) {
-    const compactMessage = message.replace(/^Firebase:\s*/i, "").trim();
-    if (!parts.some(p => compactMessage.includes(p.split("=")[1]))) {
-      parts.push(`message=${compactMessage}`);
-    }
-  }
-
-  const remainingCustomData = { ...customData };
-  delete remainingCustomData.requestName;
-  delete remainingCustomData.serverCode;
-  delete remainingCustomData.serverStatus;
-  delete remainingCustomData.serverMessage;
-  if (Object.keys(remainingCustomData).length) {
-    parts.push(`customData=${safeJson(remainingCustomData)}`);
-  }
-
-  if (!parts.length) parts.push(String(err) || "Unknown notification error");
-  return parts.join(" | ");
+  if (err?.code) parts.push(`code=${String(err.code)}`);
+  const custom = err?.customData || {};
+  if (custom.requestName) parts.push(`request=${custom.requestName}`);
+  if (custom.serverCode) parts.push(`serverCode=${custom.serverCode}`);
+  if (custom.serverStatus) parts.push(`serverStatus=${custom.serverStatus}`);
+  if (custom.serverMessage) parts.push(`serverMessage=${custom.serverMessage}`);
+  if (parts.length) return parts.join(" | ");
+  return err?.message ? String(err.message) : String(err) || "Unknown notification error";
 }
 
 async function saveSubscription(token, owner) {
@@ -102,8 +82,8 @@ async function syncNotificationOwner() {
   if (!messaging || Notification.permission !== "granted") return;
   const owner = getCurrentOwner();
   if (!owner) {
-    setButtonState("Select Sebo or Alomi", true);
-    setStatus("Notifications are tied to one specific user, not All.");
+    setButtonState("🔔", true, "Select Sebo or Alomi to use notifications");
+    setStatus("Notifications are tied to one specific user, not All.", 3500);
     return;
   }
 
@@ -116,44 +96,36 @@ async function syncNotificationOwner() {
     if (!token) throw new Error("Firebase did not return a messaging token");
 
     await saveSubscription(token, owner);
-    setButtonState(`Notifications: ${owner}`);
-    setStatus("Registered successfully.");
+    setButtonState("🔔", false, `Notifications registered for ${owner}`);
+    setStatus(`Notifications registered for ${owner}.`, 1800);
   } catch (err) {
     console.error("Unable to sync notification subscription", err);
-    console.error("Notification diagnostic payload", {
-      code: err?.code,
-      message: err?.message,
-      customData: err?.customData,
-      name: err?.name,
-      stack: err?.stack
-    });
-    const detail = formatError(err);
-    setButtonState("Retry Notifications");
-    setStatus(detail);
+    setButtonState("🔔!", false, "Retry notifications");
+    setStatus(formatError(err));
   }
 }
 
 async function enableNotifications() {
   const owner = getCurrentOwner();
   if (!owner) {
-    setButtonState("Select Sebo or Alomi", true);
-    setStatus("Choose Sebo or Alomi first.");
+    setButtonState("🔔", true, "Select Sebo or Alomi");
+    setStatus("Choose Sebo or Alomi first.", 3000);
     return;
   }
 
-  setButtonState("Enabling…", true);
+  setButtonState("…", true, "Enabling notifications");
   setStatus("");
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      setButtonState("Enable Notifications");
-      setStatus(`Notification permission is ${permission}.`);
+      setButtonState("🔕", false, "Enable notifications");
+      setStatus(`Notification permission is ${permission}.`, 3500);
       return;
     }
     await syncNotificationOwner();
   } catch (err) {
     console.error("Unable to enable notifications", err);
-    setButtonState("Retry Notifications");
+    setButtonState("🔔!", false, "Retry notifications");
     setStatus(formatError(err));
   } finally {
     if (notificationButton) notificationButton.disabled = false;
@@ -161,33 +133,27 @@ async function enableNotifications() {
 }
 
 function installNotificationControls() {
-  const userSelector = document.querySelector(".user-selector");
-  if (!userSelector) return;
+  const headerActions = document.querySelector(".header-actions");
+  if (!headerActions) return;
 
   const wrapper = document.createElement("div");
   wrapper.id = "notification-controls";
-  wrapper.style.marginTop = "6px";
-  wrapper.style.textAlign = "center";
 
   notificationButton = document.createElement("button");
   notificationButton.type = "button";
   notificationButton.id = "notification-toggle";
-  notificationButton.textContent = Notification.permission === "granted"
-    ? "Notifications enabled"
-    : "Enable Notifications";
+  notificationButton.textContent = Notification.permission === "granted" ? "🔔" : "🔕";
+  notificationButton.title = Notification.permission === "granted" ? "Notifications" : "Enable notifications";
+  notificationButton.setAttribute("aria-label", notificationButton.title);
   notificationButton.addEventListener("click", enableNotifications);
 
   notificationStatus = document.createElement("small");
   notificationStatus.id = "notification-status";
   notificationStatus.style.display = "none";
-  notificationStatus.style.marginTop = "4px";
-  notificationStatus.style.maxWidth = "420px";
-  notificationStatus.style.overflowWrap = "anywhere";
-  notificationStatus.style.whiteSpace = "normal";
 
   wrapper.appendChild(notificationButton);
   wrapper.appendChild(notificationStatus);
-  userSelector.appendChild(wrapper);
+  headerActions.appendChild(wrapper);
 }
 
 async function initializeNotifications() {
@@ -197,19 +163,16 @@ async function initializeNotifications() {
 
   const supported = await isSupported();
   if (!supported) {
-    setButtonState("Notifications unsupported", true);
-    setStatus("Firebase Messaging reports that this browser/app context does not support web push.");
+    setButtonState("🔕", true, "Notifications unsupported");
     return;
   }
 
   try {
-    serviceWorkerRegistration = await navigator.serviceWorker.register("./firebase-messaging-sw.js", {
-      scope: "./"
-    });
+    serviceWorkerRegistration = await navigator.serviceWorker.register("./firebase-messaging-sw.js", { scope: "./" });
     messaging = getMessaging(app);
   } catch (err) {
     console.error("PWA notification initialization failed", err);
-    setButtonState("Retry Notifications");
+    setButtonState("🔔!", false, "Retry notifications");
     setStatus(formatError(err));
     return;
   }
@@ -219,9 +182,7 @@ async function initializeNotifications() {
     if (Notification.permission === "granted") syncNotificationOwner();
   });
 
-  if (Notification.permission === "granted") {
-    await syncNotificationOwner();
-  }
+  if (Notification.permission === "granted") await syncNotificationOwner();
 
   onMessage(messaging, payload => {
     if (!payload.notification || !serviceWorkerRegistration) return;
@@ -233,7 +194,7 @@ async function initializeNotifications() {
 window.addEventListener("DOMContentLoaded", () => {
   initializeNotifications().catch(err => {
     console.error("PWA notification initialization failed", err);
-    setButtonState("Retry Notifications");
+    setButtonState("🔔!", false, "Retry notifications");
     setStatus(formatError(err));
   });
 });
