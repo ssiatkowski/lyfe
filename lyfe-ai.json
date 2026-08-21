@@ -25,8 +25,9 @@
   },
   "public_read_api": {
     "method": "GET",
-    "url": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi",
+    "url": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi",
     "authentication": "none",
+    "write_capability": false,
     "query_parameters": {
       "owner": {
         "required": true,
@@ -41,9 +42,9 @@
       }
     },
     "example_requests": [
-      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi?owner=Sebo",
-      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi?owner=Alomi",
-      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi?owner=Sebo&through=2026-08-23"
+      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo",
+      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Alomi",
+      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo&through=2026-08-23"
     ],
     "response_fields": {
       "owner": "Canonical owner requested",
@@ -60,7 +61,8 @@
     },
     "privacy": "This endpoint is intentionally public and read-only. It exposes only task-planning fields. It does not expose emails, Firebase document IDs, notification tokens, authentication data, or stats."
   },
-  "writes": {
+  "private_write_api": {
+    "url": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi",
     "public": false,
     "description": "Add and modify operations require a private per-person API key. Delete is intentionally not exposed by the API."
   }
