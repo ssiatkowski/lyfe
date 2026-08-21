@@ -157,25 +157,7 @@ for (const spec of reminderSpecs) {
 }
 
 //////////////////////////////////////////////////
-// Lyfe AI / ChatGPT task API
-//
-// GET is deliberately public and read-only so ordinary ChatGPT conversations
-// can inspect current tasks without a custom GPT, plugin, or login. Public GET
-// requires an explicit owner (Sebo/Sebastian or Alomi) and exposes only fields
-// useful for planning; Firebase document IDs are withheld.
-//
-// POST/PATCH remain private. Two separate secrets bind write-capable callers to
-// one person. Sebo's secret can only access Sebo + All, while Alomi's can only
-// access Alomi + All. Delete is intentionally not exposed.
-//
-// Cost guardrails:
-// - no API background work or polling
-// - at most four owner-filtered reads for a list operation
-// - each collection query capped at 200 documents
-// - public reads rate-limited to 30/minute per owner and short-cacheable
-// - add = one Firestore write
-// - modify = one document read + one write
-// - maxInstances=1 and an in-memory 30 requests/minute throttle
+// Shared API helpers
 //////////////////////////////////////////////////
 function getCallerOwner(req) {
   const supplied = String(req.get('X-Lyfe-Key') || '');
@@ -241,6 +223,66 @@ async function readDueTasks(owner, throughDate, includeIds = false) {
   });
 }
 
+//////////////////////////////////////////////////
+// Public read-only AI endpoint
+//
+// This function has no write routes and no secrets. Ordinary ChatGPT can call
+// it directly to inspect Sebo or Alomi tasks for planning. Shared All tasks are
+// included automatically. Public responses intentionally omit document IDs.
+//////////////////////////////////////////////////
+exports.taskReadApi = functions
+  .runWith({ maxInstances: 1 })
+  .region('us-west2')
+  .https
+  .onRequest(async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    if (req.method === 'OPTIONS') return res.status(204).send('');
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Read-only endpoint' });
+
+    const owner = normalizePublicOwner(req.query.owner);
+    if (!owner) {
+      return res.status(400).json({
+        error: 'owner is required',
+        acceptedOwners: ['Sebo', 'Sebastian', 'Alomi'],
+        discovery: 'https://ssiatkowski.github.io/lyfe/lyfe-ai.json'
+      });
+    }
+
+    if (!allowApiRequest(`public:${owner}`)) {
+      return res.status(429).json({ error: 'Too many requests; try again in a minute' });
+    }
+
+    const through = req.query.through || pacificDateString();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(through)) {
+      return res.status(400).json({ error: 'through must be YYYY-MM-DD' });
+    }
+
+    try {
+      res.set('Cache-Control', 'public, max-age=15, s-maxage=30');
+      const tasks = await readDueTasks(owner, through, false);
+      return res.json({
+        service: 'Lyfe',
+        owner,
+        today: pacificDateString(),
+        through,
+        count: tasks.length,
+        tasks,
+        discovery: 'https://ssiatkowski.github.io/lyfe/lyfe-ai.json'
+      });
+    } catch (err) {
+      console.error('taskReadApi error', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+//////////////////////////////////////////////////
+// Private add / modify API
+//
+// Two separate secrets bind callers to one person. Sebo's secret can only
+// access Sebo + All, while Alomi's can only access Alomi + All. Delete is not
+// exposed. GET is kept here for future authenticated clients and includes IDs.
+//////////////////////////////////////////////////
 function buildNewTask(type, name, owner, dueDate, frequency) {
   const todayTimestamp = dateStringToSafeTimestamp(pacificDateString());
   if (type === 'todo' || type === 'birthday') {
@@ -310,56 +352,21 @@ exports.taskApi = functions
     res.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
     if (req.method === 'OPTIONS') return res.status(204).send('');
 
-    const suppliedKey = String(req.get('X-Lyfe-Key') || '');
     const callerOwner = getCallerOwner(req);
+    if (!callerOwner) return res.status(401).json({ error: 'Unauthorized' });
+    if (!allowApiRequest(`private:${callerOwner}`)) {
+      return res.status(429).json({ error: 'Too many requests; try again in a minute' });
+    }
 
     try {
       if (req.method === 'GET') {
-        // If a caller supplies a key, require it to be valid. With no key,
-        // use the explicit public owner query parameter.
-        if (suppliedKey && !callerOwner) return res.status(401).json({ error: 'Unauthorized' });
-
-        const publicOwner = normalizePublicOwner(req.query.owner);
-        const owner = callerOwner || publicOwner;
-        if (!owner) {
-          return res.status(400).json({
-            error: 'owner is required for public reads',
-            acceptedOwners: ['Sebo', 'Sebastian', 'Alomi'],
-            discovery: 'https://ssiatkowski.github.io/lyfe/lyfe-ai.json'
-          });
-        }
-
-        const rateBucket = callerOwner ? `private:${callerOwner}` : `public:${owner}`;
-        if (!allowApiRequest(rateBucket)) {
-          return res.status(429).json({ error: 'Too many requests; try again in a minute' });
-        }
-
         const through = req.query.through || pacificDateString();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(through)) {
           return res.status(400).json({ error: 'through must be YYYY-MM-DD' });
         }
-
-        // Public data can be cached very briefly to absorb accidental duplicate
-        // fetches. Authenticated responses include IDs and must not be cached.
-        if (callerOwner) res.set('Cache-Control', 'private, no-store');
-        else res.set('Cache-Control', 'public, max-age=15, s-maxage=30');
-
-        const tasks = await readDueTasks(owner, through, Boolean(callerOwner));
-        return res.json({
-          service: 'Lyfe',
-          owner,
-          today: pacificDateString(),
-          through,
-          count: tasks.length,
-          tasks,
-          discovery: 'https://ssiatkowski.github.io/lyfe/lyfe-ai.json'
-        });
-      }
-
-      // All writes require a valid per-person secret.
-      if (!callerOwner) return res.status(401).json({ error: 'Unauthorized' });
-      if (!allowApiRequest(`private:${callerOwner}`)) {
-        return res.status(429).json({ error: 'Too many requests; try again in a minute' });
+        res.set('Cache-Control', 'private, no-store');
+        const tasks = await readDueTasks(callerOwner, through, true);
+        return res.json({ owner: callerOwner, through, count: tasks.length, tasks });
       }
 
       if (req.method === 'POST') {
