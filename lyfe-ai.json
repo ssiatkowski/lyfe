@@ -1,0 +1,67 @@
+{
+  "service": "Lyfe",
+  "version": 1,
+  "description": "Private web task manager for two people, with a deliberately public read-only AI endpoint for task planning. The browser app itself requires Google sign-in. Writes are not public.",
+  "homepage": "https://ssiatkowski.github.io/lyfe/",
+  "intended_users": [
+    {
+      "canonical_owner": "Sebo",
+      "aliases": ["Sebo", "Sebastian"]
+    },
+    {
+      "canonical_owner": "Alomi",
+      "aliases": ["Alomi"]
+    }
+  ],
+  "ai_usage": {
+    "when_to_use": [
+      "When the user asks to check, review, summarize, prioritize, plan, or catch up on their Lyfe tasks.",
+      "When the user asks what is overdue, due today, or due through a future date in Lyfe."
+    ],
+    "owner_selection": "Use owner=Sebo for Sebastian/Sebo and owner=Alomi for Alomi. If the current user's identity is not clear from the conversation or saved context, ask which person before fetching. Never guess between Sebo and Alomi.",
+    "shared_tasks": "Tasks owned by All are automatically included in either person's results.",
+    "planning_guidance": "For catch-up planning, fetch through today unless the user asks about a future horizon. Use daysOverdue, frequency, task type, and due date to prioritize. Do not treat a very overdue repeating task as requiring multiple completions; it represents one currently outstanding recurrence.",
+    "cost_guidance": "Make one read request per user question when possible. Do not poll or repeatedly refetch to verify the same answer."
+  },
+  "public_read_api": {
+    "method": "GET",
+    "url": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi",
+    "authentication": "none",
+    "query_parameters": {
+      "owner": {
+        "required": true,
+        "accepted": ["Sebo", "Sebastian", "Alomi"],
+        "description": "Whose tasks to read. Shared All tasks are included automatically."
+      },
+      "through": {
+        "required": false,
+        "format": "YYYY-MM-DD",
+        "default": "current date in America/Los_Angeles",
+        "description": "Return active tasks due on or before this inclusive date."
+      }
+    },
+    "example_requests": [
+      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi?owner=Sebo",
+      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi?owner=Alomi",
+      "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi?owner=Sebo&through=2026-08-23"
+    ],
+    "response_fields": {
+      "owner": "Canonical owner requested",
+      "today": "Current date in America/Los_Angeles",
+      "through": "Inclusive query horizon",
+      "count": "Number of returned tasks",
+      "tasks[].type": "todo, repeating, contact, or birthday",
+      "tasks[].name": "Human-readable task name",
+      "tasks[].owner": "Sebo, Alomi, or All",
+      "tasks[].dueDate": "YYYY-MM-DD",
+      "tasks[].status": "overdue, due_today, or upcoming",
+      "tasks[].daysOverdue": "Positive integer if overdue, otherwise 0",
+      "tasks[].frequency": "Days between occurrences, when applicable"
+    },
+    "privacy": "This endpoint is intentionally public and read-only. It exposes only task-planning fields. It does not expose emails, Firebase document IDs, notification tokens, authentication data, or stats."
+  },
+  "writes": {
+    "public": false,
+    "description": "Add and modify operations require a private per-person API key. Delete is intentionally not exposed by the API."
+  }
+}
