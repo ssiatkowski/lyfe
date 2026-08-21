@@ -9,12 +9,21 @@ Public read-only task API:
 https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi
 
 Usage:
-- For Sebastian/Sebo, GET taskReadApi?owner=Sebo
-- For Alomi, GET taskReadApi?owner=Alomi
-- Add &through=YYYY-MM-DD to include tasks due through a future date.
+- For Sebastian/Sebo, use owner=Sebo.
+- For Alomi, use owner=Alomi.
 - Shared tasks owned by All are included automatically.
 - If the user's identity is unclear, ask whether they are Sebo or Alomi before fetching.
-- For catch-up planning, normally make one request through today and reason from dueDate, status, daysOverdue, frequency, and type.
+- For general task review, prioritization, optimization, planning, or 'check my tasks', fetch the FULL active task system with &through=2099-12-31. This includes future tasks as well as overdue tasks.
+- For narrowly scoped overdue/due-today questions, omit through so the endpoint defaults to today; use status to distinguish overdue from due_today.
+- For a requested future horizon, set &through=YYYY-MM-DD to that inclusive date.
+- For catch-up planning, prefer the full active task system so upcoming workload is considered alongside overdue items.
+- A very overdue repeating task represents one outstanding recurrence, not one required completion for every missed interval.
 - Do not repeatedly refetch the same task list unless the user asks for a refresh.
+
+Examples:
+- Full Sebo system: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo&through=2099-12-31
+- Full Alomi system: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Alomi&through=2099-12-31
+- Sebo due/overdue through today: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo
+- Alomi due/overdue through today: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Alomi
 
 The public reader has no write routes and exposes only task-planning fields. Add/modify use a separate private API; delete is not available through the API.
