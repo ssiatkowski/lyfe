@@ -35,6 +35,13 @@ function dateStringToSafeTimestamp(dateString) {
   return Number.isFinite(timestamp) ? timestamp : NaN;
 }
 
+function daysBetweenDateStrings(earlier, later) {
+  const a = dateStringToSafeTimestamp(earlier);
+  const b = dateStringToSafeTimestamp(later);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.max(0, Math.round((b - a) / ONE_DAY));
+}
+
 function taskDueTimestamp(collectionName, task) {
   if (collectionName === 'repeatingTasks') return task.lastCompleted + task.frequency * ONE_DAY;
   if (collectionName === 'contactTasks') return task.lastContact + task.frequency * ONE_DAY;
@@ -50,6 +57,20 @@ function collectionForType(type) {
   if (type === 'contact') return 'contactTasks';
   if (type === 'todo') return 'todos';
   if (type === 'birthday') return 'birthdays';
+  return null;
+}
+
+function typeForCollection(collectionName) {
+  if (collectionName === 'repeatingTasks') return 'repeating';
+  if (collectionName === 'contactTasks') return 'contact';
+  if (collectionName === 'todos') return 'todo';
+  return 'birthday';
+}
+
+function normalizePublicOwner(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'sebo' || normalized === 'sebastian') return 'Sebo';
+  if (normalized === 'alomi') return 'Alomi';
   return null;
 }
 
@@ -102,6 +123,7 @@ async function sendPushReminders(context) {
   for (const [owner, tokens] of tokensByOwner.entries()) {
     const alerts = alertsByOwner.get(owner);
     if (!alerts || (!alerts.dueToday.length && !alerts.overdue.length)) continue;
+
     const total = alerts.dueToday.length + alerts.overdue.length;
     const pieces = [];
     if (alerts.overdue.length) pieces.push(`${alerts.overdue.length} overdue`);
@@ -116,6 +138,7 @@ async function sendPushReminders(context) {
       webpush: { fcmOptions: { link: `${APP_URL}?user=${encodeURIComponent(owner)}` } }
     }));
   }
+
   return Promise.all(sends);
 }
 
@@ -134,19 +157,25 @@ for (const spec of reminderSpecs) {
 }
 
 //////////////////////////////////////////////////
-// ChatGPT task API
+// Lyfe AI / ChatGPT task API
 //
-// Two separate secrets bind callers to one person. The API never accepts an
-// arbitrary person name for private tasks: Sebo's secret sees/writes Sebo + All,
-// while Alomi's sees/writes Alomi + All.
+// GET is deliberately public and read-only so ordinary ChatGPT conversations
+// can inspect current tasks without a custom GPT, plugin, or login. Public GET
+// requires an explicit owner (Sebo/Sebastian or Alomi) and exposes only fields
+// useful for planning; Firebase document IDs are withheld.
+//
+// POST/PATCH remain private. Two separate secrets bind write-capable callers to
+// one person. Sebo's secret can only access Sebo + All, while Alomi's can only
+// access Alomi + All. Delete is intentionally not exposed.
 //
 // Cost guardrails:
-// - no background work or listeners
+// - no API background work or polling
 // - at most four owner-filtered reads for a list operation
-// - each collection query is capped at 200 documents
+// - each collection query capped at 200 documents
+// - public reads rate-limited to 30/minute per owner and short-cacheable
 // - add = one Firestore write
 // - modify = one document read + one write
-// - maxInstances=1 and an in-memory 30 requests/minute safety throttle
+// - maxInstances=1 and an in-memory 30 requests/minute throttle
 //////////////////////////////////////////////////
 function getCallerOwner(req) {
   const supplied = String(req.get('X-Lyfe-Key') || '');
@@ -156,11 +185,11 @@ function getCallerOwner(req) {
   return null;
 }
 
-function allowApiRequest(owner) {
+function allowApiRequest(bucketName) {
   const now = Date.now();
-  const bucket = apiRateBuckets.get(owner);
+  const bucket = apiRateBuckets.get(bucketName);
   if (!bucket || now - bucket.startedAt >= API_RATE_WINDOW_MS) {
-    apiRateBuckets.set(owner, { startedAt: now, count: 1 });
+    apiRateBuckets.set(bucketName, { startedAt: now, count: 1 });
     return true;
   }
   if (bucket.count >= API_RATE_MAX_PER_WINDOW) return false;
@@ -168,7 +197,7 @@ function allowApiRequest(owner) {
   return true;
 }
 
-async function readDueTasks(owner, throughDate) {
+async function readDueTasks(owner, throughDate, includeIds = false) {
   const owners = [owner, 'All'];
   const result = [];
   const collections = ['repeatingTasks', 'contactTasks', 'todos', 'birthdays'];
@@ -179,35 +208,37 @@ async function readDueTasks(owner, throughDate) {
       .get())
   );
 
+  const today = pacificDateString();
+
   snapshots.forEach((snapshot, index) => {
     const collectionName = collections[index];
     snapshot.forEach(docSnap => {
       const task = docSnap.data();
       const dueTimestamp = taskDueTimestamp(collectionName, task);
       if (!Number.isFinite(dueTimestamp)) return;
-      if (dateStringForTimestamp(dueTimestamp) > throughDate) return;
 
-      const type = collectionName === 'repeatingTasks'
-        ? 'repeating'
-        : collectionName === 'contactTasks'
-          ? 'contact'
-          : collectionName === 'todos'
-            ? 'todo'
-            : 'birthday';
+      const dueDate = dateStringForTimestamp(dueTimestamp);
+      if (dueDate > throughDate) return;
 
+      const status = dueDate < today ? 'overdue' : dueDate === today ? 'due_today' : 'upcoming';
       const item = {
-        id: docSnap.id,
-        type,
+        type: typeForCollection(collectionName),
         name: taskDisplayName(collectionName, task),
         owner: task.owner,
-        dueDate: dueTimestamp
+        dueDate,
+        status,
+        daysOverdue: status === 'overdue' ? daysBetweenDateStrings(dueDate, today) : 0
       };
       if (task.frequency) item.frequency = task.frequency;
+      if (includeIds) item.id = docSnap.id;
       result.push(item);
     });
   });
 
-  return result.sort((a, b) => a.dueDate - b.dueDate);
+  return result.sort((a, b) => {
+    if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
 }
 
 function buildNewTask(type, name, owner, dueDate, frequency) {
@@ -245,7 +276,7 @@ function buildTaskUpdates(type, body) {
 
   if (body.owner !== undefined) {
     if (body.owner !== 'self' && body.owner !== 'All') return { error: 'owner must be self or All' };
-    updates.owner = body.owner; // converted to caller owner later
+    updates.owner = body.owner;
   }
 
   if (body.frequency !== undefined) {
@@ -279,20 +310,56 @@ exports.taskApi = functions
     res.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
     if (req.method === 'OPTIONS') return res.status(204).send('');
 
+    const suppliedKey = String(req.get('X-Lyfe-Key') || '');
     const callerOwner = getCallerOwner(req);
-    if (!callerOwner) return res.status(401).json({ error: 'Unauthorized' });
-    if (!allowApiRequest(callerOwner)) {
-      return res.status(429).json({ error: 'Too many requests; try again in a minute' });
-    }
 
     try {
       if (req.method === 'GET') {
+        // If a caller supplies a key, require it to be valid. With no key,
+        // use the explicit public owner query parameter.
+        if (suppliedKey && !callerOwner) return res.status(401).json({ error: 'Unauthorized' });
+
+        const publicOwner = normalizePublicOwner(req.query.owner);
+        const owner = callerOwner || publicOwner;
+        if (!owner) {
+          return res.status(400).json({
+            error: 'owner is required for public reads',
+            acceptedOwners: ['Sebo', 'Sebastian', 'Alomi'],
+            discovery: 'https://ssiatkowski.github.io/lyfe/lyfe-ai.json'
+          });
+        }
+
+        const rateBucket = callerOwner ? `private:${callerOwner}` : `public:${owner}`;
+        if (!allowApiRequest(rateBucket)) {
+          return res.status(429).json({ error: 'Too many requests; try again in a minute' });
+        }
+
         const through = req.query.through || pacificDateString();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(through)) {
           return res.status(400).json({ error: 'through must be YYYY-MM-DD' });
         }
-        const tasks = await readDueTasks(callerOwner, through);
-        return res.json({ owner: callerOwner, through, count: tasks.length, tasks });
+
+        // Public data can be cached very briefly to absorb accidental duplicate
+        // fetches. Authenticated responses include IDs and must not be cached.
+        if (callerOwner) res.set('Cache-Control', 'private, no-store');
+        else res.set('Cache-Control', 'public, max-age=15, s-maxage=30');
+
+        const tasks = await readDueTasks(owner, through, Boolean(callerOwner));
+        return res.json({
+          service: 'Lyfe',
+          owner,
+          today: pacificDateString(),
+          through,
+          count: tasks.length,
+          tasks,
+          discovery: 'https://ssiatkowski.github.io/lyfe/lyfe-ai.json'
+        });
+      }
+
+      // All writes require a valid per-person secret.
+      if (!callerOwner) return res.status(401).json({ error: 'Unauthorized' });
+      if (!allowApiRequest(`private:${callerOwner}`)) {
+        return res.status(429).json({ error: 'Too many requests; try again in a minute' });
       }
 
       if (req.method === 'POST') {
