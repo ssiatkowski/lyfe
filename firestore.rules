@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isApprovedLyfeUser() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'sebastiansiatkowski@gmail.com',
+          'alomip@gmail.com'
+        ];
+    }
+
+    // The browser app is private to the two approved Google accounts.
+    // Cloud Functions using the Admin SDK bypass these client rules.
+    match /{document=**} {
+      allow read, write: if isApprovedLyfeUser();
+    }
+  }
+}
