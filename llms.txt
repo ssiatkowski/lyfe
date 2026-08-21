@@ -6,15 +6,15 @@ Machine-readable integration metadata:
 https://ssiatkowski.github.io/lyfe/lyfe-ai.json
 
 Public read-only task API:
-https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi
+https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi
 
 Usage:
-- For Sebastian/Sebo, GET taskApi?owner=Sebo
-- For Alomi, GET taskApi?owner=Alomi
+- For Sebastian/Sebo, GET taskReadApi?owner=Sebo
+- For Alomi, GET taskReadApi?owner=Alomi
 - Add &through=YYYY-MM-DD to include tasks due through a future date.
 - Shared tasks owned by All are included automatically.
 - If the user's identity is unclear, ask whether they are Sebo or Alomi before fetching.
 - For catch-up planning, normally make one request through today and reason from dueDate, status, daysOverdue, frequency, and type.
 - Do not repeatedly refetch the same task list unless the user asks for a refresh.
 
-Public reads expose only task-planning fields. Writes require a private per-person key; delete is not available through the API.
+The public reader has no write routes and exposes only task-planning fields. Add/modify use a separate private API; delete is not available through the API.
