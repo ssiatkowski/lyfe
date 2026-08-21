@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, setPersistence, browserLocalPersistence, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, setPersistence, browserLocalPersistence, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC_BtuwYiwwmDpAJQuRt4x30YyPGTYvZ7s",
@@ -35,16 +35,30 @@ function renderGate(message = "Sign in with an approved Google account to use Ly
     Object.assign(gate.style, { position:"fixed", inset:"0", zIndex:"99999", background:"rgba(245,247,250,.98)", display:"flex", alignItems:"center", justifyContent:"center" });
     document.body.appendChild(gate);
     document.getElementById("google-sign-in").addEventListener("click", async () => {
+      const button = document.getElementById("google-sign-in");
+      const messageEl = document.getElementById("auth-gate-message");
       try {
+        button.disabled = true;
+        messageEl.textContent = "Opening Google sign-in…";
         await setPersistence(auth, browserLocalPersistence);
-        // Popup is simplest on desktop; redirect is more reliable for iOS/PWA.
-        if (/iPhone|iPad|iPod/i.test(navigator.userAgent) || window.matchMedia("(display-mode: standalone)").matches) {
-          await signInWithRedirect(auth, provider);
-        } else {
-          await signInWithPopup(auth, provider);
-        }
+
+        // Lyfe is hosted on GitHub Pages while Firebase Auth uses firebaseapp.com.
+        // Redirect auth depends on cross-origin storage that modern Safari blocks.
+        // Popup auth avoids that redirect-storage dependency and works from the
+        // user's direct button press on desktop, mobile Safari, and the PWA.
+        const result = await signInWithPopup(auth, provider);
+        await acceptUser(result.user);
       } catch (err) {
-        document.getElementById("auth-gate-message").textContent = err?.message || String(err);
+        console.error("Lyfe Google sign-in error", err);
+        if (err?.code === "auth/popup-blocked") {
+          messageEl.textContent = "Google sign-in was blocked. Allow pop-ups for this site and try again.";
+        } else if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
+          messageEl.textContent = "Google sign-in was cancelled. Tap the button to try again.";
+        } else {
+          messageEl.textContent = err?.message || String(err);
+        }
+      } finally {
+        button.disabled = false;
       }
     });
   }
@@ -71,17 +85,10 @@ async function acceptUser(user) {
   return true;
 }
 
-// Resolve a redirect result first, then observe persisted auth state.
 try {
   await setPersistence(auth, browserLocalPersistence);
-  const result = await getRedirectResult(auth);
-  if (result?.user) {
-    const ok = await acceptUser(result.user);
-    if (ok) location.replace(location.pathname + location.search + location.hash);
-  }
 } catch (err) {
-  console.error("Lyfe auth redirect error", err);
-  renderGate(err?.message || "Google sign-in failed.");
+  console.error("Lyfe auth persistence error", err);
 }
 
 onAuthStateChanged(auth, async (user) => {
