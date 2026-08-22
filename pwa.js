@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
 import { getMessaging, getToken, isSupported, onMessage } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-messaging.js";
 
@@ -13,8 +14,8 @@ const firebaseConfig = {
 };
 
 const VAPID_KEY = "BBWG6zMC5ezp6GeYGTw61llTBO97hfSoCxN0J_0vLlf5taCHnTZVpvCPlGu3B_Vx4_cIgkiBHuXtOehKc6DffT4";
-
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 const VALID_NOTIFICATION_OWNERS = new Set(["Sebo", "Alomi"]);
 const DEVICE_ID_KEY = "lyfeNotificationDeviceId";
@@ -24,6 +25,7 @@ let serviceWorkerRegistration = null;
 let notificationButton = null;
 let notificationStatus = null;
 let statusTimer = null;
+let initialized = false;
 
 function getCurrentOwner() {
   const owner = localStorage.getItem("currentUser");
@@ -52,9 +54,7 @@ function setStatus(text = "", autoHideMs = 0) {
   notificationStatus.textContent = text;
   notificationStatus.style.display = text ? "block" : "none";
   if (text && autoHideMs) {
-    statusTimer = setTimeout(() => {
-      notificationStatus.style.display = "none";
-    }, autoHideMs);
+    statusTimer = setTimeout(() => { notificationStatus.style.display = "none"; }, autoHideMs);
   }
 }
 
@@ -66,8 +66,7 @@ function formatError(err) {
   if (custom.serverCode) parts.push(`serverCode=${custom.serverCode}`);
   if (custom.serverStatus) parts.push(`serverStatus=${custom.serverStatus}`);
   if (custom.serverMessage) parts.push(`serverMessage=${custom.serverMessage}`);
-  if (parts.length) return parts.join(" | ");
-  return err?.message ? String(err.message) : String(err) || "Unknown notification error";
+  return parts.length ? parts.join(" | ") : (err?.message ? String(err.message) : String(err) || "Unknown notification error");
 }
 
 async function saveSubscription(token, owner) {
@@ -79,7 +78,7 @@ async function saveSubscription(token, owner) {
 }
 
 async function syncNotificationOwner() {
-  if (!messaging || Notification.permission !== "granted") return;
+  if (!messaging || Notification.permission !== "granted" || !auth.currentUser) return;
   const owner = getCurrentOwner();
   if (!owner) {
     setButtonState("🔔", true, "Select Sebo or Alomi to use notifications");
@@ -89,12 +88,8 @@ async function syncNotificationOwner() {
 
   try {
     setStatus("");
-    const token = await getToken(messaging, {
-      serviceWorkerRegistration,
-      vapidKey: VAPID_KEY
-    });
+    const token = await getToken(messaging, { serviceWorkerRegistration, vapidKey: VAPID_KEY });
     if (!token) throw new Error("Firebase did not return a messaging token");
-
     await saveSubscription(token, owner);
     setButtonState("🔔", false, `Notifications registered for ${owner}`);
     setStatus(`Notifications registered for ${owner}.`, 1800);
@@ -106,6 +101,10 @@ async function syncNotificationOwner() {
 }
 
 async function enableNotifications() {
+  if (!auth.currentUser) {
+    setStatus("Sign in first.", 2500);
+    return;
+  }
   const owner = getCurrentOwner();
   if (!owner) {
     setButtonState("🔔", true, "Select Sebo or Alomi");
@@ -134,8 +133,7 @@ async function enableNotifications() {
 
 function installNotificationControls() {
   const headerActions = document.querySelector(".header-actions");
-  if (!headerActions) return;
-
+  if (!headerActions || document.getElementById("notification-controls")) return;
   const wrapper = document.createElement("div");
   wrapper.id = "notification-controls";
 
@@ -150,15 +148,13 @@ function installNotificationControls() {
   notificationStatus = document.createElement("small");
   notificationStatus.id = "notification-status";
   notificationStatus.style.display = "none";
-
-  wrapper.appendChild(notificationButton);
-  wrapper.appendChild(notificationStatus);
+  wrapper.append(notificationButton, notificationStatus);
   headerActions.appendChild(wrapper);
 }
 
 async function initializeNotifications() {
-  if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
-
+  if (initialized || !("serviceWorker" in navigator) || !("Notification" in window)) return;
+  initialized = true;
   installNotificationControls();
 
   const supported = await isSupported();
@@ -177,8 +173,7 @@ async function initializeNotifications() {
     return;
   }
 
-  const userSelect = document.getElementById("user-select");
-  userSelect?.addEventListener("change", () => {
+  document.getElementById("user-select")?.addEventListener("change", () => {
     if (Notification.permission === "granted") syncNotificationOwner();
   });
 
@@ -192,9 +187,12 @@ async function initializeNotifications() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  initializeNotifications().catch(err => {
-    console.error("PWA notification initialization failed", err);
-    setButtonState("🔔!", false, "Retry notifications");
-    setStatus(formatError(err));
+  onAuthStateChanged(auth, user => {
+    if (!user) return;
+    initializeNotifications().catch(err => {
+      console.error("PWA notification initialization failed", err);
+      setButtonState("🔔!", false, "Retry notifications");
+      setStatus(formatError(err));
+    });
   });
 });
