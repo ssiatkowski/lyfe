@@ -1,24 +1,30 @@
 # Lyfe task manager
 
-Lyfe is Sebastian (Sebo) and Alomi's task manager.
+Lyfe is Sebastian (Sebo) and Alomi's life-management task app.
 
 Machine-readable integration metadata:
 https://ssiatkowski.github.io/lyfe/lyfe-ai.json
 
-Public read-only task API:
+Public read-only active-task API:
 https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi
+
+Public read-only completion-history API (explicit history requests only):
+https://us-west2-lyfe-cacf7.cloudfunctions.net/taskHistoryApi
 
 Usage:
 - For Sebastian/Sebo, use owner=Sebo.
 - For Alomi, use owner=Alomi.
 - Shared tasks owned by All are included automatically.
-- If the user's identity is unclear, ask whether they are Sebo or Alomi before fetching.
-- For general task review, prioritization, optimization, planning, or 'check my tasks', fetch the FULL active task system with &through=2099-12-31. This includes future tasks as well as overdue tasks.
-- For narrowly scoped overdue/due-today questions, omit through so the endpoint defaults to today; use status to distinguish overdue from due_today.
-- For a requested future horizon, set &through=YYYY-MM-DD to that inclusive date.
-- For catch-up planning, prefer the full active task system so upcoming workload is considered alongside overdue items.
-- A very overdue repeating task represents one outstanding recurrence, not one required completion for every missed interval.
-- Do not repeatedly refetch the same task list unless the user asks for a refresh.
+- If the user's identity is unclear, ask whether the user is Sebo or Alomi before fetching.
+- For narrow overdue/today/week questions, use only the necessary through=YYYY-MM-DD horizon.
+- For general task review, prioritization, catch-up planning, optimization, or whole-system analysis, fetch the FULL active system with through=2099-12-31 so upcoming workload is included.
+- Public task reads include area, missing-area state, verbal priority for Repeating/Todos, estimated effort when set, due status, days overdue, and frequency.
+- Existing Repeating/Todo tasks with no stored priority mean Routine — keep on track.
+- A very overdue repeating/contact task represents one currently outstanding recurrence, not one required completion for every missed interval.
+- For broad reviews, point out tasks that still have no area; do not nag about missing areas on every narrow task question.
+- Flexible and Someday tasks remain active even though they are excluded from normal mobile reminder digests.
+- Do NOT fetch completion history during normal task planning. Only use taskHistoryApi when the user explicitly asks for completion history, actual cadence, or frequency analysis. Pass owner, type, and the exact current task name.
+- Make one read per question when possible; do not poll or repeatedly refetch.
 
 Examples:
 - Full Sebo system: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo&through=2099-12-31
@@ -26,4 +32,4 @@ Examples:
 - Sebo due/overdue through today: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo
 - Alomi due/overdue through today: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Alomi
 
-The public reader has no write routes and exposes only task-planning fields. Add/modify use a separate private API; delete is not available through the API.
+The public endpoints have no write routes. Add/modify use a separate private API; delete is not available through the API.
