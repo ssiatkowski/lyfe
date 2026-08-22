@@ -1,6 +1,6 @@
 {
   "service": "Lyfe",
-  "version": 2,
+  "version": 3,
   "description": "Private life-management task app for Sebastian (Sebo) and Alomi, with deliberately public read-only AI endpoints for planning. The browser app requires Google sign-in. Writes are not public.",
   "homepage": "https://ssiatkowski.github.io/lyfe/",
   "intended_users": [
@@ -34,17 +34,27 @@
         "unassigned": null,
         "values": {
           "home": "Home",
-          "health_fitness": "Health & Fitness",
-          "money_finance": "Money & Finance",
-          "work_career": "Work & Career",
+          "health": "Health",
+          "fitness": "Fitness",
+          "money": "Money",
+          "work": "Work",
           "family": "Family",
-          "friends_social": "Friends & Social",
-          "personal_admin": "Personal Admin",
-          "errands": "Errands",
-          "car_transport": "Car & Transportation",
-          "learning_growth": "Learning & Growth",
-          "travel": "Travel",
-          "other": "Other"
+          "social": "Social",
+          "pet": "Pet",
+          "hobbies": "Hobbies",
+          "learning": "Learning",
+          "travel": "Travel"
+        },
+        "legacy_values": {
+          "money_finance": "Interpret as Money until the task is next saved",
+          "work_career": "Interpret as Work until the task is next saved",
+          "friends_social": "Interpret as Social until the task is next saved",
+          "learning_growth": "Interpret as Learning until the task is next saved",
+          "health_fitness": "Legacy combined category; do not guess whether Health or Fitness. Treat as needing recategorization.",
+          "personal_admin": "Retired category; treat as needing recategorization.",
+          "errands": "Retired category; treat as needing recategorization.",
+          "car_transport": "Retired category; treat as needing recategorization.",
+          "other": "Retired category; treat as needing recategorization."
         }
       },
       "contact_and_birthday": {
@@ -105,7 +115,7 @@
       "tasks[].status": "overdue, due_today, or upcoming",
       "tasks[].daysOverdue": "Positive integer if overdue, otherwise 0",
       "tasks[].frequency": "Days between occurrences when applicable",
-      "tasks[].area": "Area key, or null when unassigned",
+      "tasks[].area": "Area key, or null when unassigned. Legacy area keys may still appear on older tasks; use schema.areas.repeating_and_todos.legacy_values to interpret them.",
       "tasks[].missingArea": "true when no area has been assigned",
       "tasks[].priority": "Verbal-priority key for Repeating/Todo. Legacy missing priority is normalized to routine.",
       "tasks[].estimatedMinutes": "User-entered effort estimate for Repeating/Todo, or null if not set"
