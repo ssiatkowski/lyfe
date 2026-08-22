@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Lyfe Task API
-  version: 1.1.0
-  description: Read, add, and modify Lyfe tasks. Delete is intentionally unsupported.
+  version: 1.2.0
+  description: Read, add, and modify Lyfe tasks. Delete is intentionally unsupported. Repeating and Todo tasks can also carry area, verbal priority, and estimated effort metadata.
 servers:
   - url: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi
 security:
@@ -11,19 +11,19 @@ paths:
   /:
     get:
       operationId: getDueTasks
-      summary: Get tasks due on or before a date
-      description: Returns tasks for the authenticated person plus shared All tasks. Do not call repeatedly unless the user asks for refreshed data.
+      summary: Get active tasks due on or before a date
+      description: Returns tasks for the authenticated person plus shared All tasks. Use through=2099-12-31 for a full active-system review. Do not call repeatedly unless the user asks for refreshed data.
       parameters:
         - name: through
           in: query
           required: false
-          description: Inclusive date in YYYY-MM-DD format. Omit for today.
+          description: Inclusive date in YYYY-MM-DD format. Omit for today; use 2099-12-31 for the full active task system.
           schema:
             type: string
             format: date
       responses:
         '200':
-          description: Due tasks
+          description: Active tasks through the requested date
           content:
             application/json:
               schema:
@@ -41,12 +41,22 @@ paths:
                         type: { type: string, enum: [todo, repeating, contact, birthday] }
                         name: { type: string }
                         owner: { type: string }
-                        dueDate: { type: integer }
+                        dueDate: { type: string, format: date }
+                        status: { type: string, enum: [overdue, due_today, upcoming] }
+                        daysOverdue: { type: integer }
                         frequency: { type: integer }
+                        area:
+                          type: [string, 'null']
+                        missingArea: { type: boolean }
+                        priority:
+                          type: string
+                          enum: [critical, important, routine, flexible, someday]
+                        estimatedMinutes:
+                          type: [integer, 'null']
     post:
       operationId: addTask
       summary: Add one task
-      description: Adds exactly one task. Use owner self unless the user explicitly says the task is shared.
+      description: Adds exactly one task. Use owner self unless the user explicitly says the task is shared. Priority and estimatedMinutes apply only to repeating/todo tasks. Area choices depend on task type.
       requestBody:
         required: true
         content:
@@ -72,6 +82,17 @@ paths:
                   type: integer
                   minimum: 1
                   description: Days between occurrences; required for repeating or contact.
+                area:
+                  type: string
+                  description: For repeating/todo use home, health_fitness, money_finance, work_career, family, friends_social, personal_admin, errands, car_transport, learning_growth, travel, or other. For contact/birthday use family, friends, or colleagues. Omit to leave unassigned.
+                priority:
+                  type: string
+                  enum: [critical, important, routine, flexible, someday]
+                  description: Repeating/todo only. Defaults to routine when omitted.
+                estimatedMinutes:
+                  type: integer
+                  minimum: 1
+                  description: Optional user-entered effort estimate in minutes for repeating/todo tasks.
       responses:
         '201':
           description: Task created
@@ -83,7 +104,7 @@ paths:
     patch:
       operationId: modifyTask
       summary: Modify one existing task
-      description: Modify name, owner, due date, or frequency. Never delete tasks. Identify the task using an id returned by getDueTasks; if ambiguous, read once and ask the user rather than guessing.
+      description: Modify supported task metadata. Never delete tasks. Identify the task using an id returned by getDueTasks; if ambiguous, read once and ask the user rather than guessing.
       requestBody:
         required: true
         content:
@@ -110,6 +131,16 @@ paths:
                   type: integer
                   minimum: 1
                   description: Valid only for repeating or contact.
+                area:
+                  type: [string, 'null']
+                  description: Set null to clear. Valid area choices depend on task type.
+                priority:
+                  type: string
+                  enum: [critical, important, routine, flexible, someday]
+                  description: Valid only for repeating/todo.
+                estimatedMinutes:
+                  type: [integer, 'null']
+                  description: Positive minutes for repeating/todo, or null to clear.
       responses:
         '200':
           description: Task modified
