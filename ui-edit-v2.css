@@ -1,0 +1,226 @@
+/* Compact edit-sheet pass. Loaded after the general mobile UI layer. */
+
+#edit-modal,
+#edit-modal .modal-content,
+#edit-modal #edit-form,
+#edit-modal #edit-fields,
+#edit-modal .edit-field,
+#edit-modal .edit-grid-row {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#edit-modal {
+  overflow: hidden;
+}
+
+#edit-modal .modal-content {
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
+}
+
+#edit-modal input,
+#edit-modal select,
+#edit-modal button,
+#edit-modal .history-section,
+#edit-modal .history-output {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* iOS date/select controls otherwise keep a surprisingly large intrinsic width. */
+#edit-modal input[type="date"],
+#edit-modal input[type="number"],
+#edit-modal select {
+  width: 100% !important;
+}
+
+.edit-grid-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+#edit-fields > .edit-field,
+.edit-grid-row > .edit-field {
+  margin: 0;
+}
+
+.owner-only-detail {
+  padding: 0 !important;
+  margin: 1px 0 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  min-height: 24px;
+  color: #69727b !important;
+  font-size: .82rem !important;
+}
+.owner-only-detail strong {
+  color: #4e5963 !important;
+  font-weight: 600;
+}
+
+.compact-history-section {
+  border-top: 1px solid #e7eaed !important;
+  margin: 1px 0 0 !important;
+  padding-top: 7px !important;
+}
+.compact-history-section .history-load-btn {
+  width: auto !important;
+  min-height: 32px;
+  padding: 5px 9px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #087cf0 !important;
+  text-align: left;
+  font-size: .86rem;
+}
+.compact-history-section .history-output:not(:empty) {
+  margin-top: 5px;
+  padding-bottom: 4px;
+}
+
+.edit-actions-v2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 9px;
+  width: 100%;
+  margin-top: 8px;
+}
+#edit-form .edit-actions-v2 > button {
+  width: 100% !important;
+  min-height: 42px;
+  margin: 0 !important;
+  border-radius: 10px !important;
+}
+#edit-form .edit-actions-v2 #edit-cancel-btn {
+  background: #eef0f2 !important;
+  color: #59616a !important;
+}
+
+/* New area choices look intentional even though native selects render them. */
+#r-area,
+#t-area,
+#c-area,
+#b-area,
+#edit-area {
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  #edit-modal {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+
+  #edit-modal .modal-content {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: calc(100dvh - 8px) !important;
+    padding: 15px 15px calc(12px + env(safe-area-inset-bottom)) !important;
+    border-radius: 22px 22px 0 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #edit-modal .modal-content::before {
+    margin-bottom: 7px !important;
+  }
+
+  #edit-modal-title {
+    font-size: 1.32rem !important;
+    line-height: 1.15;
+    margin-bottom: 9px !important;
+    padding-right: 42px !important;
+  }
+
+  #edit-modal .edit-modal-close-x {
+    width: 34px;
+    height: 34px;
+    top: 11px;
+    right: 12px;
+    font-size: 22px;
+  }
+
+  #edit-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #edit-modal .edit-field label {
+    margin: 0 0 4px !important;
+    font-size: .76rem !important;
+    line-height: 1.1;
+    color: #65707a;
+  }
+
+  #edit-modal #edit-form input,
+  #edit-modal #edit-form select {
+    height: 43px !important;
+    min-height: 43px !important;
+    padding: 7px 10px !important;
+    margin: 0 !important;
+    border-radius: 9px !important;
+    font-size: .96rem !important;
+  }
+
+  #edit-modal #edit-name {
+    font-size: 1rem !important;
+  }
+
+  .edit-grid-row {
+    gap: 8px;
+  }
+
+  .priority-select {
+    font-size: .9rem !important;
+  }
+
+  .owner-only-detail {
+    min-height: 20px;
+    font-size: .76rem !important;
+  }
+
+  .compact-history-section {
+    padding-top: 5px !important;
+  }
+  .compact-history-section .history-load-btn {
+    min-height: 28px !important;
+    padding: 3px 4px !important;
+    font-size: .79rem !important;
+  }
+
+  .edit-actions-v2 {
+    margin-top: 6px;
+    gap: 7px;
+  }
+  #edit-form .edit-actions-v2 > button {
+    min-height: 42px !important;
+    padding: 8px 10px !important;
+    font-size: .94rem !important;
+  }
+
+  /* The normal edit state should fit on modern phones without vertical scroll.
+     If the user explicitly expands completion history or opens the keyboard,
+     vertical scrolling remains available by design. */
+  #edit-modal .history-output:empty {
+    display: none;
+  }
+}
+
+@media (max-width: 390px) {
+  #edit-modal .modal-content {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .edit-grid-row { gap: 6px; }
+  #edit-modal #edit-form input,
+  #edit-modal #edit-form select {
+    font-size: .9rem !important;
+  }
+}
