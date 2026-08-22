@@ -1,36 +1,92 @@
 {
   "service": "Lyfe",
   "version": 2,
-  "description": "Private web task manager for Sebastian (Sebo) and Alomi, with a deliberately public read-only AI endpoint so ChatGPT can review, analyze, prioritize, and plan around live task data. The browser app itself requires Google sign-in. Writes are not public.",
+  "description": "Private life-management task app for Sebastian (Sebo) and Alomi, with deliberately public read-only AI endpoints for planning. The browser app requires Google sign-in. Writes are not public.",
   "homepage": "https://ssiatkowski.github.io/lyfe/",
   "intended_users": [
-    {
-      "canonical_owner": "Sebo",
-      "aliases": ["Sebo", "Sebastian"]
-    },
-    {
-      "canonical_owner": "Alomi",
-      "aliases": ["Alomi"]
-    }
+    { "canonical_owner": "Sebo", "aliases": ["Sebo", "Sebastian"] },
+    { "canonical_owner": "Alomi", "aliases": ["Alomi"] }
   ],
   "ai_usage": {
     "when_to_use": [
-      "When the user asks to check or review their tasks or task list.",
-      "When the user asks what is overdue, due today, upcoming, or due through a future date.",
-      "When the user wants to strategize, prioritize, simplify, optimize, prune, rebalance, or otherwise think through their entire Lyfe task system.",
-      "When the user asks for a catch-up plan based on current overdue tasks plus upcoming workload."
+      "Whenever the user asks about their tasks, task list, overdue items, recurring tasks, upcoming tasks, planning, prioritization, catching up, productivity, or optimizing Lyfe.",
+      "When the user asks what is overdue, due today, due soon, or due through a future date.",
+      "When the user asks for a broad life/task-system review, including whether priorities, areas, effort estimates, or recurrence frequencies should change."
     ],
-    "owner_selection": "Use owner=Sebo for Sebastian/Sebo and owner=Alomi for Alomi. If the current user's identity is not clear from the conversation or saved context, ask which person before fetching. Never guess between Sebo and Alomi.",
+    "owner_selection": "Use owner=Sebo for Sebastian/Sebo and owner=Alomi for Alomi. If identity is not clear from conversation or saved context, ask which person before fetching. Never guess between Sebo and Alomi.",
     "shared_tasks": "Tasks owned by All are automatically included in either person's results.",
-    "fetch_strategy": {
-      "general_task_request": "For general requests such as 'check my tasks', 'review my task list', 'help me optimize my tasks', or 'what should I work on', fetch the full active task system using through=2099-12-31 so future tasks are included as well as overdue tasks.",
-      "overdue_or_today_only": "For narrowly scoped requests about overdue tasks or what is due today, omit through so the endpoint defaults to today, then use each task's status field to distinguish overdue from due_today.",
-      "specific_future_horizon": "If the user asks about a specific future date or window, use that inclusive YYYY-MM-DD date in through.",
-      "catch_up_planning": "When making a catch-up plan, normally fetch the full active task system, not just overdue items, so upcoming obligations can be considered before scheduling overdue work.",
-      "repeating_task_semantics": "A very overdue repeating task represents one currently outstanding recurrence, not a requirement to perform one completion for every missed interval."
+    "narrow_queries": "For narrow questions such as overdue, today, tonight, or this week, fetch only the date horizon needed.",
+    "strategic_queries": "For broad review, catch-up planning, optimization, workload balancing, or questions about the whole task system, request the full active list using through=2099-12-31. Do not analyze only overdue tasks for these strategic questions because upcoming workload matters.",
+    "planning_guidance": [
+      "Prioritize using due date, days overdue, verbal priority, estimated effort, recurrence frequency, area, task type, consequence of delay, and near-future workload rather than simply sorting by oldest due date.",
+      "Do not treat a very overdue repeating/contact task as requiring multiple completions. It represents one currently outstanding recurrence.",
+      "Existing Repeating/Todo tasks that have no stored priority should be treated as Routine — keep on track.",
+      "For broad reviews, point out tasks with missingArea=true and remind the user that they still need an area. Do not nag about missing areas on every narrow task question.",
+      "If estimatedMinutes is null, do not invent an effort estimate unless the user asks you to estimate it.",
+      "Flexible and Someday tasks remain real active tasks even though they do not trigger regular mobile notifications."
+    ],
+    "completion_history_guidance": "Completion history is intentionally separate and must not be fetched during normal task reads. Only query taskHistoryApi when the user explicitly asks to inspect completion history, analyze actual completion cadence, compare configured frequency with behavior, or otherwise requests history-based analysis. Make one history request per specific task when possible.",
+    "cost_guidance": "Make one task-list read request per user question when possible. Do not poll or repeatedly refetch to verify the same answer. Completion-history reads are opt-in only."
+  },
+  "schema": {
+    "areas": {
+      "repeating_and_todos": {
+        "unassigned": null,
+        "values": {
+          "home": "Home",
+          "health_fitness": "Health & Fitness",
+          "money_finance": "Money & Finance",
+          "work_career": "Work & Career",
+          "family": "Family",
+          "friends_social": "Friends & Social",
+          "personal_admin": "Personal Admin",
+          "errands": "Errands",
+          "car_transport": "Car & Transportation",
+          "learning_growth": "Learning & Growth",
+          "travel": "Travel",
+          "other": "Other"
+        }
+      },
+      "contact_and_birthday": {
+        "unassigned": null,
+        "values": {
+          "family": "Family",
+          "friends": "Friends",
+          "colleagues": "Colleagues"
+        }
+      }
     },
-    "planning_guidance": "Use dueDate, status, daysOverdue, frequency, task type, and the broader upcoming workload to reason about urgency and sequencing. When optimizing the system itself, consider whether frequencies are sensible, whether tasks are too vague, whether one-off tasks should be recurring or vice versa, and whether workload is clustered unnecessarily.",
-    "cost_guidance": "Make one read request per user question when possible. Do not poll or repeatedly refetch to verify the same answer. A full-system read and a due-only read use the same bounded Firestore collection queries, so prefer the scope that best answers the user's question rather than trying to minimize returned rows."
+    "priorities": {
+      "applies_to": ["repeating", "todo"],
+      "default_for_legacy_tasks": "routine",
+      "ordered_high_to_low": [
+        { "value": "critical", "label": "Critical — must not slip" },
+        { "value": "important", "label": "Important — should happen soon" },
+        { "value": "routine", "label": "Routine — keep on track" },
+        { "value": "flexible", "label": "Flexible — can wait" },
+        { "value": "someday", "label": "Someday — no pressure" }
+      ],
+      "notification_behavior": {
+        "critical": "Included in normal 7 AM/8 PM digests. When overdue, also gets extra reminders at 8 AM, 1 PM, and 7 PM Pacific.",
+        "important": "Included in normal 7 AM/8 PM digests. When overdue, also gets an extra reminder at noon Pacific.",
+        "routine": "Included in normal 7 AM/8 PM digests.",
+        "flexible": "Visible in Lyfe and AI reads but excluded from regular mobile reminder digests.",
+        "someday": "Visible in Lyfe and AI reads but excluded from regular mobile reminder digests. It still becomes visually reddish in the UI when very overdue."
+      }
+    },
+    "estimated_effort": {
+      "applies_to": ["repeating", "todo"],
+      "field": "estimatedMinutes",
+      "nullable": true,
+      "meaning": "User-entered estimated minutes. Existing tasks are intentionally blank/null until the user adds an estimate."
+    },
+    "completion_history": {
+      "applies_to": ["repeating", "contact", "birthday"],
+      "storage": "Separate taskCompletionHistory documents, not embedded in normal task documents.",
+      "maximum_stored_per_task": 100,
+      "normal_task_reads_include_history": false,
+      "ui_behavior": "History is read only after the user opens a task and explicitly taps Load completion history."
+    }
   },
   "public_read_api": {
     "method": "GET",
@@ -38,38 +94,36 @@
     "authentication": "none",
     "write_capability": false,
     "query_parameters": {
-      "owner": {
-        "required": true,
-        "accepted": ["Sebo", "Sebastian", "Alomi"],
-        "description": "Whose tasks to read. Shared All tasks are included automatically."
-      },
-      "through": {
-        "required": false,
-        "format": "YYYY-MM-DD",
-        "default": "current date in America/Los_Angeles",
-        "description": "Return active tasks due on or before this inclusive date. For a full-system strategic review, use 2099-12-31 so future tasks are included."
-      }
-    },
-    "recommended_requests": {
-      "sebo_full_task_system": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo&through=2099-12-31",
-      "alomi_full_task_system": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Alomi&through=2099-12-31",
-      "sebo_due_through_today": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo",
-      "alomi_due_through_today": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Alomi"
+      "owner": { "required": true, "accepted": ["Sebo", "Sebastian", "Alomi"], "description": "Whose tasks to read. Shared All tasks are included automatically." },
+      "through": { "required": false, "format": "YYYY-MM-DD", "default": "current date in America/Los_Angeles", "description": "Return active tasks due on or before this inclusive date. Use 2099-12-31 for the full active system." }
     },
     "response_fields": {
-      "owner": "Canonical owner requested",
-      "today": "Current date in America/Los_Angeles",
-      "through": "Inclusive query horizon",
-      "count": "Number of returned tasks",
       "tasks[].type": "todo, repeating, contact, or birthday",
       "tasks[].name": "Human-readable task name",
       "tasks[].owner": "Sebo, Alomi, or All",
       "tasks[].dueDate": "YYYY-MM-DD",
       "tasks[].status": "overdue, due_today, or upcoming",
       "tasks[].daysOverdue": "Positive integer if overdue, otherwise 0",
-      "tasks[].frequency": "Days between occurrences, when applicable"
+      "tasks[].frequency": "Days between occurrences when applicable",
+      "tasks[].area": "Area key, or null when unassigned",
+      "tasks[].missingArea": "true when no area has been assigned",
+      "tasks[].priority": "Verbal-priority key for Repeating/Todo. Legacy missing priority is normalized to routine.",
+      "tasks[].estimatedMinutes": "User-entered effort estimate for Repeating/Todo, or null if not set"
     },
-    "privacy": "This endpoint is intentionally public and read-only. It exposes only task-planning fields. It does not expose emails, Firebase document IDs, notification tokens, authentication data, or stats."
+    "privacy": "Intentionally public and read-only. Exposes task-planning fields only; no emails, Firebase document IDs, notification tokens, authentication data, stats, or completion history."
+  },
+  "public_history_api": {
+    "method": "GET",
+    "url": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskHistoryApi",
+    "authentication": "none",
+    "write_capability": false,
+    "use_only_when_explicitly_requested": true,
+    "query_parameters": {
+      "owner": { "required": true, "accepted": ["Sebo", "Sebastian", "Alomi"] },
+      "type": { "required": true, "accepted": ["repeating", "contact", "birthday"] },
+      "name": { "required": true, "description": "Exact current task name from taskReadApi." }
+    },
+    "response": "Returns up to the last 100 completion timestamps/dates, configured frequency, and average observed interval. It performs extra Firestore reads and should never be called during normal planning unless the user asked for history-based analysis."
   },
   "private_write_api": {
     "url": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi",
