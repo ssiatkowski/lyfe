@@ -19,6 +19,7 @@ Usage:
 - For narrow overdue/today/week questions, use only the necessary through=YYYY-MM-DD horizon.
 - For general task review, prioritization, catch-up planning, optimization, or whole-system analysis, fetch the FULL active system with through=2099-12-31 so upcoming workload is included.
 - Public task reads include area, missing-area state, verbal priority for Repeating/Todos, estimated effort when set, due status, days overdue, and frequency.
+- Canonical Repeating/Todo areas are: Home, Health, Fitness, Money, Work, Family, Social, Pet, Hobbies, Learning, Travel, or unassigned. Keep in Touch/Occasion areas remain Family, Friends, Colleagues, or unassigned. Older tasks can still contain retired area keys; use lyfe-ai.json for the legacy mappings and do not guess between Health and Fitness for the old combined health_fitness value.
 - Existing Repeating/Todo tasks with no stored priority mean Routine — keep on track.
 - A very overdue repeating/contact task represents one currently outstanding recurrence, not one required completion for every missed interval.
 - For broad reviews, point out tasks that still have no area; do not nag about missing areas on every narrow task question.
