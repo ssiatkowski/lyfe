@@ -1,0 +1,160 @@
+/* Lyfe UI refinements layered over the core stylesheet. */
+
+/* Keep task cards compact: metadata stays available in Edit, not on the card. */
+.task-meta { display: none !important; }
+
+.column-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.secondary-task-btn {
+  border: 1px solid #c8cdd3;
+  background: #f3f5f7;
+  color: #495057;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.task-card-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+}
+.task-card-footer .task-actions {
+  margin-top: 0;
+  flex: 1 1 auto;
+}
+.area-ascii-icon {
+  flex: 0 0 auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid rgba(0,0,0,.16);
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: rgba(255,255,255,.58);
+  color: #59616a;
+  font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: -.3px;
+}
+.area-ascii-icon.missing-area-icon {
+  opacity: .48;
+  border-style: dashed;
+}
+
+/* Priority is visually silent until the task is near its due date. */
+.task-item.priority-critical:not(.due-soon):not(.almost-due):not(.due-today):not(.overdue):not(.overdue-flexible):not(.overdue-someday),
+.task-item.priority-important:not(.due-soon):not(.almost-due):not(.due-today):not(.overdue):not(.overdue-flexible):not(.overdue-someday),
+.task-item.priority-routine:not(.due-soon):not(.almost-due):not(.due-today):not(.overdue):not(.overdue-flexible):not(.overdue-someday),
+.task-item.priority-flexible:not(.due-soon):not(.almost-due):not(.due-today):not(.overdue):not(.overdue-flexible):not(.overdue-someday),
+.task-item.priority-someday:not(.due-soon):not(.almost-due):not(.due-today):not(.overdue):not(.overdue-flexible):not(.overdue-someday) {
+  border-left-color: transparent !important;
+  background: #f1f1f1 !important;
+  box-shadow: none !important;
+}
+
+/* Due soon: visible, but restrained. */
+.task-item.due-soon.priority-critical { border-left: 6px solid #d9480f !important; background: #fff0e6 !important; }
+.task-item.due-soon.priority-important { border-left: 6px solid #e09200 !important; background: #fff5d8 !important; }
+.task-item.due-soon.priority-routine { border-left: 5px solid #6fa600 !important; background: #f0fff0 !important; }
+.task-item.due-soon.priority-flexible { border-left: 4px solid #7296b8 !important; background: #f1f6fa !important; }
+.task-item.due-soon.priority-someday { border-left: 3px solid #a9a39a !important; background: #f5f4f1 !important; }
+
+/* Almost due: priority becomes more apparent. */
+.task-item.almost-due.priority-critical { border-left: 7px solid #c62020 !important; background: #ffe3df !important; box-shadow: 0 2px 8px rgba(198,32,32,.10); }
+.task-item.almost-due.priority-important { border-left: 6px solid #d66b00 !important; background: #ffead7 !important; }
+.task-item.almost-due.priority-routine { border-left: 5px solid #e69a00 !important; background: #fff2cc !important; }
+.task-item.almost-due.priority-flexible { border-left: 4px solid #8c9aa8 !important; background: #f3f5f7 !important; }
+.task-item.almost-due.priority-someday { border-left: 3px solid #aaa39a !important; background: #f5f3ef !important; }
+
+/* Due today. */
+.task-item.due-today.priority-critical {
+  border: 2px solid #a90019 !important;
+  border-left-width: 8px !important;
+  background: #ffd3d8 !important;
+  box-shadow: 0 0 0 3px rgba(169,0,25,.10), 0 3px 10px rgba(169,0,25,.12) !important;
+}
+.task-item.due-today.priority-critical strong { color: #8e0015; }
+.task-item.due-today.priority-important { border-left: 7px solid #c94d00 !important; background: #ffe1d2 !important; }
+.task-item.due-today.priority-routine { border-left: 6px solid #e00000 !important; background: #ffe6e6 !important; }
+.task-item.due-today.priority-flexible { border-left: 5px solid #c98238 !important; background: #fff0e3 !important; }
+.task-item.due-today.priority-someday { border-left: 4px solid #ae7777 !important; background: #f8ecec !important; }
+
+/* Overdue: priority drives severity, while low priorities eventually become red too. */
+.task-item.overdue.priority-critical {
+  background: #ffcbd2 !important;
+  border: 2px solid #950016 !important;
+  border-left-width: 9px !important;
+  box-shadow: 0 0 0 3px rgba(149,0,22,.14), 0 5px 16px rgba(149,0,22,.17) !important;
+}
+.task-item.overdue.priority-important { background: #ffd9c5 !important; border-left: 8px solid #b94200 !important; }
+.task-item.overdue.priority-routine { background: #f9d6d5 !important; border-left: 6px solid #8b0000 !important; }
+.task-item.overdue-flexible { background: #f8e7df !important; border-left: 5px solid #bf7954 !important; }
+.task-item.overdue-someday { background: #f3eee6 !important; border-left: 4px solid #aa9880 !important; }
+.task-item.priority-flexible.very-overdue,
+.task-item.priority-someday.very-overdue { background: #f6d9d9 !important; border-left-color: #a64d4d !important; }
+.task-item.priority-flexible.extremely-overdue,
+.task-item.priority-someday.extremely-overdue { background: #f1caca !important; border-left-color: #812d2d !important; }
+
+/* Priority selector reflects the selected level in Add/Edit screens. */
+.priority-select {
+  font-weight: 600;
+  transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease;
+}
+.priority-select-critical { background: #ffe0e4 !important; border-color: #c7263e !important; color: #850013 !important; }
+.priority-select-important { background: #ffe9d8 !important; border-color: #d66b00 !important; color: #8b3f00 !important; }
+.priority-select-routine { background: #edf1f4 !important; border-color: #89939d !important; color: #39434d !important; }
+.priority-select-flexible { background: #eef4f8 !important; border-color: #8ea6b8 !important; color: #526775 !important; }
+.priority-select-someday { background: #f4f1eb !important; border-color: #aaa296 !important; color: #696158 !important; }
+
+.edit-readonly-detail {
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  background: #f5f6f7;
+  border: 1px solid #e0e3e6;
+  border-radius: 8px;
+  font-size: .9rem;
+  color: #4e555b;
+}
+.edit-readonly-detail strong { color: #30363b; }
+
+#completed-todos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.completed-todo-item {
+  border: 1px solid #e0e3e6;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8f9fa;
+}
+.completed-todo-item strong { display: block; margin-bottom: 4px; }
+.completed-todo-item small { color: #626970; display: block; margin-top: 2px; }
+.completed-todo-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+}
+#completed-todos-status {
+  color: #666;
+  font-size: .86rem;
+  margin: 0 0 10px;
+}
+
+@media (max-width: 768px) {
+  .column-heading-actions { gap: 5px; }
+  .secondary-task-btn, .add-task-btn { padding: 7px 9px; }
+  .task-card-footer { align-items: flex-end; }
+}
