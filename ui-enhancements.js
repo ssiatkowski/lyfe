@@ -10,29 +10,61 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
+const MOBILE_BREAKPOINT = 768;
 
 const AREA_ICON_BY_LABEL = {
-  "No area": "?",
-  "Home": "H",
-  "Health & Fitness": "+",
-  "Money & Finance": "$",
-  "Work & Career": "W",
-  "Family": "F",
-  "Friends & Social": "S",
-  "Personal Admin": "A",
-  "Errands": "E",
-  "Car & Transportation": "C",
-  "Learning & Growth": "L",
-  "Travel": "T",
-  "Other": "*",
-  "Friends": "Fr",
-  "Colleagues": "Co"
+  "No area": "❔",
+  "Home": "🏠",
+  "Health & Fitness": "💪",
+  "Money & Finance": "💰",
+  "Work & Career": "💼",
+  "Family": "❤️",
+  "Friends & Social": "🫂",
+  "Personal Admin": "🗂️",
+  "Errands": "🛒",
+  "Car & Transportation": "🚗",
+  "Learning & Growth": "📚",
+  "Travel": "✈️",
+  "Other": "✨",
+  "Friends": "🫂",
+  "Colleagues": "🤝"
+};
+
+const NAV_ICONS = {
+  repeating: "🔁",
+  contact: "👥",
+  todos: "✓",
+  birthdays: "🎉",
+  calendar: "📅"
+};
+
+const SECTION_COLUMN_IDS = {
+  repeating: "repeating-column",
+  contact: "contacts-column",
+  todos: "todos-column",
+  birthdays: "birthdays-column"
+};
+
+const SECTION_LIST_IDS = {
+  repeating: "repeating-list",
+  contact: "contacts-list",
+  todos: "todos-list",
+  birthdays: "birthdays-list"
 };
 
 let pendingEditDetails = null;
+let navCountTimer = null;
 
 function getDb() {
   return getApps().length ? getFirestore(getApp()) : null;
+}
+
+function isMobile() {
+  return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[ch]);
 }
 
 function priorityFromCard(card) {
@@ -40,6 +72,14 @@ function priorityFromCard(card) {
     if (card.classList.contains(`priority-${value}`)) return value;
   }
   return "routine";
+}
+
+function statusFromCard(card) {
+  if (card.classList.contains("overdue") || card.classList.contains("overdue-flexible") || card.classList.contains("overdue-someday")) return "overdue";
+  if (card.classList.contains("due-today")) return "today";
+  if (card.classList.contains("almost-due")) return "almost";
+  if (card.classList.contains("due-soon")) return "soon";
+  return "future";
 }
 
 function applyPrioritySelectStyle(select) {
@@ -85,7 +125,7 @@ function extractEffort(card) {
 function areaIconElement(areaLabel) {
   const icon = document.createElement("span");
   icon.className = "area-ascii-icon" + (areaLabel === "No area" ? " missing-area-icon" : "");
-  icon.textContent = AREA_ICON_BY_LABEL[areaLabel] || "*";
+  icon.textContent = AREA_ICON_BY_LABEL[areaLabel] || "✨";
   icon.title = areaLabel;
   icon.setAttribute("aria-label", `Area: ${areaLabel}`);
   return icon;
@@ -101,6 +141,16 @@ function ensureTaskFooter(card, areaLabel) {
   footer.append(actions, areaIconElement(areaLabel));
 }
 
+function markDueLine(card) {
+  const dueLine = Array.from(card.querySelectorAll("small")).find(el => /^(Due:|Next due:|Next contact:|Next occurrence:)/i.test(el.textContent.trim()));
+  if (!dueLine) return null;
+  dueLine.classList.add("task-due-line");
+  const status = statusFromCard(card);
+  dueLine.dataset.status = status;
+  card.dataset.status = status;
+  return dueLine;
+}
+
 function processTaskCard(card) {
   if (!(card instanceof HTMLElement) || !card.classList.contains("task-item") || card.dataset.compactEnhanced === "1") return;
 
@@ -108,7 +158,7 @@ function processTaskCard(card) {
   const effortLabel = extractEffort(card);
   const owner = extractOwner(card);
   const name = card.querySelector("span strong")?.textContent.trim() || "";
-  const dueLine = Array.from(card.querySelectorAll("small")).find(el => /^(Due:|Next due:|Next contact:|Next occurrence:)/i.test(el.textContent.trim()));
+  const dueLine = markDueLine(card);
 
   card.dataset.taskName = name;
   card.dataset.priority = priorityFromCard(card);
@@ -130,8 +180,16 @@ function processTaskCard(card) {
     };
   });
 
+  // On phones, tapping the body of a card opens its details. Action buttons keep
+  // their normal behavior, so this gives a much larger edit target without risk.
+  card.addEventListener("click", event => {
+    if (!isMobile() || event.target.closest("button, select, input, a")) return;
+    editButton?.click();
+  });
+
   ensureTaskFooter(card, areaLabel);
   card.dataset.compactEnhanced = "1";
+  scheduleNavCountUpdate();
 }
 
 function processAllTaskCards(root = document) {
@@ -149,14 +207,12 @@ function decorateEditModal() {
 
   const detail = document.createElement("div");
   detail.className = "edit-readonly-detail";
-  detail.innerHTML = `<strong>Owner:</strong> ${escapeHtml(pendingEditDetails.owner)}`;
+  const area = pendingEditDetails.areaLabel || "No area";
+  const areaIcon = AREA_ICON_BY_LABEL[area] || "✨";
+  detail.innerHTML = `<span><strong>Owner:</strong> ${escapeHtml(pendingEditDetails.owner)}</span><span class="edit-area-detail"><strong>Area:</strong> ${areaIcon} ${escapeHtml(area)}</span>`;
   const historySection = fields.querySelector(".history-section");
   if (historySection) fields.insertBefore(detail, historySection);
   else fields.appendChild(detail);
-}
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>'"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[ch]);
 }
 
 function hideEditModalWithoutSaving() {
@@ -172,6 +228,17 @@ function setupEditModalDismissal() {
   modal.addEventListener("click", event => {
     if (event.target === modal) hideEditModalWithoutSaving();
   });
+
+  const content = modal.querySelector(".modal-content");
+  if (content && !content.querySelector(".edit-modal-close-x")) {
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "edit-modal-close-x";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close without saving");
+    close.addEventListener("click", hideEditModalWithoutSaving);
+    content.prepend(close);
+  }
 }
 
 function todoCardIdentity(card) {
@@ -198,6 +265,8 @@ function areaLabelFromStoredValue(value) {
     work_career: "Work & Career",
     family: "Family",
     friends_social: "Friends & Social",
+    friends: "Friends",
+    colleagues: "Colleagues",
     personal_admin: "Personal Admin",
     errands: "Errands",
     car_transport: "Car & Transportation",
@@ -348,12 +417,99 @@ function setupCompletedTodosModal() {
   });
 }
 
+function activeSection() {
+  return document.querySelector("#nav-bar button.active")?.dataset.type || "repeating";
+}
+
+function applyMobileSectionVisibility(section = activeSection()) {
+  const mobile = isMobile();
+  document.querySelectorAll("#columns-container > .column").forEach(column => {
+    column.classList.remove("mobile-hidden-column");
+  });
+
+  if (mobile && section !== "calendar") {
+    const visibleId = SECTION_COLUMN_IDS[section] || SECTION_COLUMN_IDS.repeating;
+    document.querySelectorAll("#columns-container > .column").forEach(column => {
+      if (column.id !== visibleId) column.classList.add("mobile-hidden-column");
+    });
+  }
+
+  updateQuickAdd(section);
+}
+
+function setupMobileNavigation() {
+  document.querySelectorAll("#nav-bar button").forEach(button => {
+    button.dataset.navIcon = NAV_ICONS[button.dataset.type] || "";
+    button.addEventListener("click", () => {
+      const section = button.dataset.type;
+      setTimeout(() => applyMobileSectionVisibility(section), 0);
+      if (isMobile()) button.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    });
+  });
+
+  window.addEventListener("resize", () => applyMobileSectionVisibility(activeSection()));
+  setTimeout(() => applyMobileSectionVisibility(activeSection()), 0);
+}
+
+function setupMobileQuickAdd() {
+  if (document.getElementById("mobile-quick-add")) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "mobile-quick-add";
+  button.innerHTML = `<span class="mobile-quick-add-plus">＋</span><span class="mobile-quick-add-label">Add</span>`;
+  button.setAttribute("aria-label", "Add task");
+  button.addEventListener("click", () => {
+    const section = activeSection();
+    if (section === "calendar") return;
+    const addType = section;
+    const target = document.querySelector(`.add-task-btn[data-add-type="${addType}"]`);
+    target?.click();
+  });
+  document.body.appendChild(button);
+  updateQuickAdd(activeSection());
+}
+
+function updateQuickAdd(section = activeSection()) {
+  const button = document.getElementById("mobile-quick-add");
+  if (!button) return;
+  const hidden = !isMobile() || section === "calendar";
+  button.classList.toggle("mobile-quick-add-hidden", hidden);
+  const labels = {
+    repeating: "Add repeating task",
+    contact: "Add person reminder",
+    todos: "Add todo",
+    birthdays: "Add occasion"
+  };
+  button.setAttribute("aria-label", labels[section] || "Add task");
+}
+
+function scheduleNavCountUpdate() {
+  clearTimeout(navCountTimer);
+  navCountTimer = setTimeout(updateNavCounts, 30);
+}
+
+function updateNavCounts() {
+  Object.entries(SECTION_LIST_IDS).forEach(([section, listId]) => {
+    const button = document.querySelector(`#nav-bar button[data-type="${section}"]`);
+    const list = document.getElementById(listId);
+    if (!button || !list) return;
+    const attention = Array.from(list.querySelectorAll(".task-item")).filter(card => {
+      const status = statusFromCard(card);
+      return status === "overdue" || status === "today";
+    }).length;
+    button.dataset.attentionCount = attention ? String(attention) : "";
+  });
+}
+
 function init() {
   ["r-priority", "t-priority"].forEach(id => wirePrioritySelect(document.getElementById(id)));
   setupEditModalDismissal();
   setupTodoCompletionCapture();
   setupCompletedTodosModal();
+  setupMobileQuickAdd();
+  setupMobileNavigation();
   processAllTaskCards();
+  scheduleNavCountUpdate();
 
   const observer = new MutationObserver(mutations => {
     for (const mutation of mutations) {
@@ -368,6 +524,7 @@ function init() {
           if (node.matches?.("#r-priority, #t-priority, #edit-priority")) wirePrioritySelect(node);
           node.querySelectorAll?.("#r-priority, #t-priority, #edit-priority").forEach(wirePrioritySelect);
         });
+        scheduleNavCountUpdate();
       }
       if (mutation.type === "attributes" && mutation.target.id === "edit-modal") decorateEditModal();
     }
