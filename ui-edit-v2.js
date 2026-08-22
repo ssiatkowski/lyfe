@@ -188,10 +188,16 @@ function compactHistorySection(history) {
 
 function compactOwnerDetail(fields) {
   const detail = fields.querySelector(".edit-readonly-detail");
-  if (!detail) return;
+  if (!detail || detail.dataset.ownerCompacted === "1") return;
+
   detail.querySelector(".edit-area-detail")?.remove();
-  const ownerText = detail.textContent.replace(/^\s*Owner:\s*/i, "").trim();
+  const ownerText = detail.textContent
+    .replace(/^\s*Owner:\s*/i, "")
+    .replace(/^(?:👤\s*)+/u, "")
+    .trim();
+
   detail.classList.add("owner-only-detail");
+  detail.dataset.ownerCompacted = "1";
   if (ownerText) detail.innerHTML = `<span>👤 <strong>${ownerText}</strong></span>`;
 }
 
@@ -287,8 +293,16 @@ function initAreaAndEditV2() {
   const observer = new MutationObserver(mutations => {
     let shouldSyncAreas = false;
     let shouldLayout = false;
+
     mutations.forEach(mutation => {
       if (mutation.type === "childList") {
+        // Only changes inside the edit fields should trigger an edit relayout.
+        // This avoids feedback loops from unrelated DOM updates while the sheet
+        // happens to be open.
+        if (mutation.target?.id === "edit-fields" || mutation.target?.closest?.("#edit-fields")) {
+          shouldLayout = true;
+        }
+
         mutation.addedNodes.forEach(node => {
           if (!(node instanceof HTMLElement)) return;
           if (node.classList.contains("task-item")) refreshCardAreaIcon(node);
@@ -302,11 +316,12 @@ function initAreaAndEditV2() {
       }
       if (mutation.type === "attributes" && mutation.target.id === "edit-modal") shouldLayout = true;
     });
-    if (shouldSyncAreas) syncAreaSelects();
-    if (shouldLayout || document.getElementById("edit-modal")?.style.display !== "none") scheduleLayout();
-  });
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
 
+    if (shouldSyncAreas) syncAreaSelects();
+    if (shouldLayout) scheduleLayout();
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
   window.addEventListener("orientationchange", scheduleLayout);
 }
 
