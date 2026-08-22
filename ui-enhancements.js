@@ -10,8 +10,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
-const app = getApps().length ? getApp() : null;
-const db = app ? getFirestore(app) : null;
 
 const AREA_ICON_BY_LABEL = {
   "No area": "?",
@@ -31,15 +29,11 @@ const AREA_ICON_BY_LABEL = {
   "Colleagues": "Co"
 };
 
-const PRIORITY_VALUE_BY_LABEL = {
-  "Critical — must not slip": "critical",
-  "Important — should happen soon": "important",
-  "Routine — keep on track": "routine",
-  "Flexible — can wait": "flexible",
-  "Someday — no pressure": "someday"
-};
-
 let pendingEditDetails = null;
+
+function getDb() {
+  return getApps().length ? getFirestore(getApp()) : null;
+}
 
 function priorityFromCard(card) {
   for (const value of ["critical", "important", "routine", "flexible", "someday"]) {
@@ -54,19 +48,16 @@ function applyPrioritySelectStyle(select) {
   ["critical", "important", "routine", "flexible", "someday"].forEach(value => {
     select.classList.remove(`priority-select-${value}`);
   });
-  const value = select.value || "routine";
-  select.classList.add(`priority-select-${value}`);
-  Array.from(select.options).forEach(option => {
-    const optionValue = option.value || "routine";
-    option.dataset.priority = optionValue;
-  });
+  select.classList.add(`priority-select-${select.value || "routine"}`);
 }
 
 function wirePrioritySelect(select) {
-  if (!select || select.dataset.priorityWired === "1") return;
-  select.dataset.priorityWired = "1";
+  if (!select) return;
+  if (select.dataset.priorityWired !== "1") {
+    select.dataset.priorityWired = "1";
+    select.addEventListener("change", () => applyPrioritySelectStyle(select));
+  }
   applyPrioritySelectStyle(select);
-  select.addEventListener("change", () => applyPrioritySelectStyle(select));
 }
 
 function extractOwner(card) {
@@ -127,10 +118,7 @@ function processTaskCard(card) {
   card.dataset.effortLabel = effortLabel;
 
   card.querySelector(".task-meta")?.remove();
-
-  card.querySelectorAll(".complete-btn").forEach(button => {
-    button.textContent = "Complete";
-  });
+  card.querySelectorAll(".complete-btn").forEach(button => { button.textContent = "Complete"; });
 
   const editButton = card.querySelector(".edit-btn");
   editButton?.addEventListener("click", () => {
@@ -154,17 +142,17 @@ function decorateEditModal() {
   const modal = document.getElementById("edit-modal");
   if (!modal || modal.style.display === "none") return;
 
-  const priority = modal.querySelector("#edit-priority");
-  wirePrioritySelect(priority);
+  wirePrioritySelect(modal.querySelector("#edit-priority"));
 
   const fields = modal.querySelector("#edit-fields");
-  if (!fields || fields.querySelector(".edit-readonly-detail")) return;
-  if (!pendingEditDetails?.owner) return;
+  if (!fields || fields.querySelector(".edit-readonly-detail") || !pendingEditDetails?.owner) return;
 
   const detail = document.createElement("div");
   detail.className = "edit-readonly-detail";
   detail.innerHTML = `<strong>Owner:</strong> ${escapeHtml(pendingEditDetails.owner)}`;
-  fields.appendChild(detail);
+  const historySection = fields.querySelector(".history-section");
+  if (historySection) fields.insertBefore(detail, historySection);
+  else fields.appendChild(detail);
 }
 
 function escapeHtml(value) {
@@ -199,26 +187,44 @@ function todoCardIdentity(card) {
 function todoMatchesCard(data, identity) {
   if ((data.name || "").trim() !== identity.name) return false;
   if ((data.owner || "") !== identity.owner) return false;
-  if (new Date(data.dueDate).toLocaleDateString() !== identity.dueLabel) return false;
-  return true;
+  return new Date(data.dueDate).toLocaleDateString() === identity.dueLabel;
+}
+
+function areaLabelFromStoredValue(value) {
+  const map = {
+    home: "Home",
+    health_fitness: "Health & Fitness",
+    money_finance: "Money & Finance",
+    work_career: "Work & Career",
+    family: "Family",
+    friends_social: "Friends & Social",
+    personal_admin: "Personal Admin",
+    errands: "Errands",
+    car_transport: "Car & Transportation",
+    learning_growth: "Learning & Growth",
+    travel: "Travel",
+    other: "Other"
+  };
+  return map[value] || "No area";
 }
 
 async function archiveAndCompleteTodo(card, button) {
-  if (!db) throw new Error("Firebase is not initialized");
+  const db = getDb();
+  if (!db) throw new Error("Firebase is not initialized yet");
   const identity = todoCardIdentity(card);
   const originalText = button.textContent;
   button.disabled = true;
   button.textContent = "Completing…";
 
   try {
-    const snap = await getDocs(collection(db, "todos"));
+    const snap = await getDocs(query(collection(db, "todos"), where("name", "==", identity.name)));
     let matches = snap.docs.filter(docSnap => todoMatchesCard(docSnap.data(), identity));
 
     if (matches.length > 1) {
       matches = matches.filter(docSnap => {
         const data = docSnap.data();
         const priority = data.priority || "routine";
-        const areaLabel = data.area ? card.dataset.areaLabel : "No area";
+        const areaLabel = areaLabelFromStoredValue(data.area);
         return priority === identity.priority && areaLabel === identity.areaLabel;
       });
     }
@@ -284,25 +290,8 @@ function formatEffort(minutes) {
   return `${Math.floor(n / 60)}h ${n % 60}m`;
 }
 
-function areaLabelFromStoredValue(value) {
-  const map = {
-    home: "Home",
-    health_fitness: "Health & Fitness",
-    money_finance: "Money & Finance",
-    work_career: "Work & Career",
-    family: "Family",
-    friends_social: "Friends & Social",
-    personal_admin: "Personal Admin",
-    errands: "Errands",
-    car_transport: "Car & Transportation",
-    learning_growth: "Learning & Growth",
-    travel: "Travel",
-    other: "Other"
-  };
-  return map[value] || "No area";
-}
-
 async function loadCompletedTodos() {
+  const db = getDb();
   if (!db) return;
   const status = document.getElementById("completed-todos-status");
   const list = document.getElementById("completed-todos-list");
@@ -369,11 +358,15 @@ function init() {
   const observer = new MutationObserver(mutations => {
     for (const mutation of mutations) {
       if (mutation.type === "childList") {
+        if (mutation.target instanceof HTMLSelectElement && mutation.target.matches("#r-priority, #t-priority, #edit-priority")) {
+          wirePrioritySelect(mutation.target);
+        }
         mutation.addedNodes.forEach(node => {
           if (!(node instanceof HTMLElement)) return;
           if (node.classList.contains("task-item")) processTaskCard(node);
           processAllTaskCards(node);
-          node.querySelectorAll?.(".priority-select, #edit-priority").forEach(wirePrioritySelect);
+          if (node.matches?.("#r-priority, #t-priority, #edit-priority")) wirePrioritySelect(node);
+          node.querySelectorAll?.("#r-priority, #t-priority, #edit-priority").forEach(wirePrioritySelect);
         });
       }
       if (mutation.type === "attributes" && mutation.target.id === "edit-modal") decorateEditModal();
