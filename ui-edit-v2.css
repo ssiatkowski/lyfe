@@ -169,12 +169,32 @@
     font-size: .96rem !important;
   }
 
+  /* Mobile Safari gives date inputs a larger intrinsic control height than
+     ordinary fields unless we explicitly normalize the native appearance. */
+  #edit-modal #edit-form input[type="date"] {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    display: block !important;
+    height: 43px !important;
+    min-height: 43px !important;
+    max-height: 43px !important;
+    line-height: 1.2 !important;
+    padding: 7px 10px !important;
+  }
+  #edit-modal #edit-form input[type="date"]::-webkit-date-and-time-value {
+    min-height: 0 !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+    text-align: left;
+  }
+
   #edit-modal #edit-name {
     font-size: 1rem !important;
   }
 
   .edit-grid-row {
     gap: 8px;
+    align-items: start;
   }
 
   .priority-select {
