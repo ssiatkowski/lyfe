@@ -40,18 +40,29 @@ const AUTH_OWNER_BY_EMAIL = {
 const GENERAL_AREAS = [
   { value: "", label: "No area" },
   { value: "home", label: "Home" },
-  { value: "health_fitness", label: "Health & Fitness" },
-  { value: "money_finance", label: "Money & Finance" },
-  { value: "work_career", label: "Work & Career" },
+  { value: "health", label: "Health" },
+  { value: "fitness", label: "Fitness" },
+  { value: "money", label: "Money" },
+  { value: "work", label: "Work" },
   { value: "family", label: "Family" },
-  { value: "friends_social", label: "Friends & Social" },
-  { value: "personal_admin", label: "Personal Admin" },
-  { value: "errands", label: "Errands" },
-  { value: "car_transport", label: "Car & Transportation" },
-  { value: "learning_growth", label: "Learning & Growth" },
-  { value: "travel", label: "Travel" },
-  { value: "other", label: "Other" }
+  { value: "social", label: "Social" },
+  { value: "pet", label: "Pet" },
+  { value: "hobbies", label: "Hobbies" },
+  { value: "learning", label: "Learning" },
+  { value: "travel", label: "Travel" }
 ];
+
+const LEGACY_AREA_LABELS = {
+  health_fitness: "Health & Fitness",
+  money_finance: "Money & Finance",
+  work_career: "Work & Career",
+  friends_social: "Friends & Social",
+  personal_admin: "Personal Admin",
+  errands: "Errands",
+  car_transport: "Car & Transportation",
+  learning_growth: "Learning & Growth",
+  other: "Other"
+};
 
 const RELATIONSHIP_AREAS = [
   { value: "", label: "No area" },
@@ -78,6 +89,14 @@ const EFFORTS = [
   { value: "120", label: "2 hours" },
   { value: "240", label: "4+ hours" }
 ];
+
+const REPEAT_STYLES = [
+  { value: "interval", label: "After completion" },
+  { value: "weekdays", label: "Scheduled weekdays" },
+  { value: "monthdays", label: "Scheduled days of month" }
+];
+const WEEKDAY_CODES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const WEEKDAY_LABELS = { sun: "Sun", mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat" };
 
 const AREA_LABELS = Object.fromEntries([...GENERAL_AREAS, ...RELATIONSHIP_AREAS].map(x => [x.value, x.label]));
 const PRIORITY_LABELS = Object.fromEntries(PRIORITIES.map(x => [x.value, x.label]));
@@ -107,6 +126,7 @@ function startApp() {
   updateUserDropdowns();
   updateOwnerDropdowns();
   initializeMetadataControls();
+  setupRepeatingScheduleControls();
 
   const userSelect = document.getElementById("user-select");
   userSelect.value = localStorage.getItem("currentUser");
@@ -188,11 +208,37 @@ function initializeMetadataControls() {
   populateSelect("t-effort", EFFORTS, "");
 }
 
+function setupRepeatingScheduleControls() {
+  const select = document.getElementById("r-repeat-style");
+  if (!select) return;
+  const update = () => updateAddRepeatingScheduleFields(select.value || "interval");
+  select.addEventListener("change", update);
+  document.getElementById("repeating-form")?.addEventListener("reset", () => setTimeout(update, 0));
+  update();
+}
+
+function updateAddRepeatingScheduleFields(style) {
+  const interval = document.getElementById("r-interval-fields");
+  const weekdays = document.getElementById("r-weekdays-fields");
+  const monthdays = document.getElementById("r-monthdays-fields");
+  if (interval) interval.hidden = style !== "interval";
+  if (weekdays) weekdays.hidden = style !== "weekdays";
+  if (monthdays) monthdays.hidden = style !== "monthdays";
+  const frequency = document.getElementById("r-frequency");
+  if (frequency) frequency.required = style === "interval";
+}
+
 function resetAddFormMetadata(type) {
   if (type === "repeating") {
     populateSelect("r-area", GENERAL_AREAS, "");
     populateSelect("r-priority", PRIORITIES, DEFAULT_PRIORITY);
     populateSelect("r-effort", EFFORTS, "");
+    const style = document.getElementById("r-repeat-style");
+    if (style) style.value = "interval";
+    document.querySelectorAll('input[name="r-weekday"]').forEach(input => { input.checked = false; });
+    const monthdays = document.getElementById("r-monthdays");
+    if (monthdays) monthdays.value = "";
+    updateAddRepeatingScheduleFields("interval");
   } else if (type === "todo") {
     populateSelect("t-area", GENERAL_AREAS, "");
     populateSelect("t-priority", PRIORITIES, DEFAULT_PRIORITY);
@@ -206,6 +252,96 @@ async function getContactTasks() { return contactTasksCache; }
 async function getTodos() { return todosCache; }
 async function getBirthdays() { return birthdaysCache; }
 
+function repeatStyleFor(task) {
+  return task?.repeatStyle === "weekdays" || task?.repeatStyle === "monthdays" ? task.repeatStyle : "interval";
+}
+
+function localMidnight(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function sameLocalDay(timestamp, date) {
+  if (!Number.isFinite(Number(timestamp)) || !timestamp) return false;
+  const a = new Date(Number(timestamp));
+  return a.getFullYear() === date.getFullYear() && a.getMonth() === date.getMonth() && a.getDate() === date.getDate();
+}
+
+function parseMonthDaysInput(value) {
+  return [...new Set(String(value || "").split(/[\s,]+/).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 31))].sort((a, b) => a - b);
+}
+
+function selectedAddWeekdays() {
+  return Array.from(document.querySelectorAll('input[name="r-weekday"]:checked')).map(input => input.value).filter(code => WEEKDAY_CODES.includes(code));
+}
+
+function scheduleMatchesDate(task, date) {
+  const style = repeatStyleFor(task);
+  if (style === "weekdays") {
+    const days = Array.isArray(task.weekdays) ? task.weekdays : [];
+    return days.includes(WEEKDAY_CODES[date.getDay()]);
+  }
+  if (style === "monthdays") {
+    const days = Array.isArray(task.monthDays) ? task.monthDays.map(Number) : [];
+    return days.includes(date.getDate());
+  }
+  return false;
+}
+
+function nextScheduledOccurrence(task, fromDate = new Date()) {
+  const start = localMidnight(fromDate);
+  for (let i = 0; i <= 370; i++) {
+    const candidate = new Date(start);
+    candidate.setDate(start.getDate() + i);
+    if (!scheduleMatchesDate(task, candidate)) continue;
+    if (i === 0 && sameLocalDay(task.lastCompleted, candidate)) continue;
+    return candidate.getTime();
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+function previousScheduledOccurrence(task, beforeDate = new Date()) {
+  const start = localMidnight(beforeDate);
+  for (let i = 1; i <= 370; i++) {
+    const candidate = new Date(start);
+    candidate.setDate(start.getDate() - i);
+    if (scheduleMatchesDate(task, candidate)) return candidate.getTime();
+  }
+  return null;
+}
+
+function repeatingNextDue(task) {
+  if (repeatStyleFor(task) === "interval") return Number(task.lastCompleted) + Number(task.frequency) * ONE_DAY;
+  return nextScheduledOccurrence(task);
+}
+
+function repeatingScheduleSummary(task) {
+  const style = repeatStyleFor(task);
+  if (style === "weekdays") {
+    const set = new Set(Array.isArray(task.weekdays) ? task.weekdays : []);
+    const ordered = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].filter(code => set.has(code));
+    return ordered.length ? ordered.map(code => WEEKDAY_LABELS[code]).join(" · ") : "No days selected";
+  }
+  if (style === "monthdays") {
+    const days = Array.isArray(task.monthDays) ? task.monthDays.map(Number).filter(n => n >= 1 && n <= 31).sort((a, b) => a - b) : [];
+    return days.length ? `Days ${days.join(", ")}` : "No days selected";
+  }
+  const frequency = Number(task.frequency) || 1;
+  return `Every ${frequency} day${frequency === 1 ? "" : "s"}`;
+}
+
+function scheduledRoutineDueToday(task) {
+  const today = new Date();
+  return repeatStyleFor(task) !== "interval" && scheduleMatchesDate(task, today) && !sameLocalDay(task.lastCompleted, today);
+}
+
+function effectiveRepeatingStreak(task) {
+  if (repeatStyleFor(task) === "interval") return task.streak || 0;
+  const previousDue = previousScheduledOccurrence(task, new Date());
+  if (!previousDue) return task.streak || 0;
+  const previousDate = new Date(previousDue);
+  return sameLocalDay(task.lastCompleted, previousDate) ? (task.streak || 0) : 0;
+}
+
 async function isCleanDayForUser(user) {
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -213,7 +349,7 @@ async function isCleanDayForUser(user) {
   const contact = (await getContactTasks()).filter(task => task.owner === user);
   const todos = (await getTodos()).filter(task => task.owner === user);
   const birthdays = (await getBirthdays()).filter(task => task.owner === user);
-  if (repeating.some(task => task.lastCompleted + task.frequency * ONE_DAY < todayMidnight)) return false;
+  if (repeating.some(task => repeatStyleFor(task) === "interval" && task.lastCompleted + task.frequency * ONE_DAY < todayMidnight)) return false;
   if (contact.some(task => task.lastContact + task.frequency * ONE_DAY < todayMidnight)) return false;
   if (todos.some(task => task.dueDate < todayMidnight)) return false;
   if (birthdays.some(task => task.dueDate < todayMidnight)) return false;
@@ -392,7 +528,7 @@ function effortLabel(minutes) {
 
 function metadataHtml(task, type) {
   const chips = [];
-  if (task.area) chips.push(`<span class="meta-chip area-chip">${escapeHtml(AREA_LABELS[task.area] || task.area)}</span>`);
+  if (task.area) chips.push(`<span class="meta-chip area-chip">${escapeHtml(AREA_LABELS[task.area] || LEGACY_AREA_LABELS[task.area] || task.area)}</span>`);
   else chips.push(`<span class="meta-chip area-chip missing-area">No area</span>`);
   if (type === "repeating" || type === "todo") {
     const priority = normalizedPriority(task);
@@ -436,6 +572,33 @@ function createSelectField(labelText, options, value, inputId) {
   return container;
 }
 
+function createWeekdayField(selectedDays = []) {
+  const container = document.createElement("div");
+  container.className = "edit-field repeat-weekdays-field";
+  container.id = "edit-weekdays-field";
+  const label = document.createElement("label");
+  label.textContent = "Days of week";
+  const picker = document.createElement("div");
+  picker.className = "weekday-picker";
+  picker.setAttribute("role", "group");
+  picker.setAttribute("aria-label", "Scheduled weekdays");
+  const selected = new Set(selectedDays);
+  ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].forEach(code => {
+    const option = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.name = "edit-weekday";
+    input.value = code;
+    input.checked = selected.has(code);
+    const text = document.createElement("span");
+    text.textContent = WEEKDAY_LABELS[code];
+    option.append(input, text);
+    picker.appendChild(option);
+  });
+  container.append(label, picker);
+  return container;
+}
+
 function completionHistoryDocId(type, taskId) { return `${type}__${taskId}`; }
 
 async function loadCompletionHistory(task, type, output, button) {
@@ -472,6 +635,18 @@ function addHistoryLoader(fieldsDiv, task, type) {
   fieldsDiv.appendChild(section);
 }
 
+function selectedEditWeekdays() {
+  return Array.from(document.querySelectorAll('input[name="edit-weekday"]:checked')).map(input => input.value).filter(code => WEEKDAY_CODES.includes(code));
+}
+
+function updateEditRepeatingScheduleFields(style) {
+  const fields = document.getElementById("edit-fields");
+  if (!fields) return;
+  fields.querySelectorAll(".repeat-interval-field").forEach(field => { field.hidden = style !== "interval"; });
+  fields.querySelectorAll(".repeat-weekdays-field").forEach(field => { field.hidden = style !== "weekdays"; });
+  fields.querySelectorAll(".repeat-monthdays-field").forEach(field => { field.hidden = style !== "monthdays"; });
+}
+
 function showEditModal(task, type, onSave) {
   const modal = document.getElementById("edit-modal");
   const titleEl = document.getElementById("edit-modal-title");
@@ -482,11 +657,30 @@ function showEditModal(task, type, onSave) {
 
   if (type === "repeating") {
     titleEl.textContent = "Edit Repeating Task";
-    fieldsDiv.appendChild(createInputField("Last completed date", "date", formatDateForInput(task.lastCompleted), "edit-date"));
-    fieldsDiv.appendChild(createInputField("Frequency (days)", "number", task.frequency, "edit-frequency"));
+    const style = repeatStyleFor(task);
+    const styleField = createSelectField("Repeat style", REPEAT_STYLES, style, "edit-repeat-style");
+    fieldsDiv.appendChild(styleField);
+
+    const dateField = createInputField("Last completed date", "date", task.lastCompleted ? formatDateForInput(task.lastCompleted) : formatDateForInput(Date.now()), "edit-date");
+    dateField.classList.add("repeat-interval-field");
+    const frequencyField = createInputField("Frequency (days)", "number", task.frequency || 7, "edit-frequency");
+    frequencyField.classList.add("repeat-interval-field");
+    fieldsDiv.append(dateField, frequencyField);
+
+    const weekdayField = createWeekdayField(Array.isArray(task.weekdays) ? task.weekdays : []);
+    fieldsDiv.appendChild(weekdayField);
+
+    const monthDaysField = createInputField("Days of month", "text", Array.isArray(task.monthDays) ? task.monthDays.join(", ") : "", "edit-monthdays");
+    monthDaysField.classList.add("repeat-monthdays-field");
+    monthDaysField.querySelector("input")?.setAttribute("inputmode", "numeric");
+    fieldsDiv.appendChild(monthDaysField);
+
     fieldsDiv.appendChild(createSelectField("Area", GENERAL_AREAS, task.area || "", "edit-area"));
     fieldsDiv.appendChild(createSelectField("Priority", PRIORITIES, normalizedPriority(task), "edit-priority"));
     fieldsDiv.appendChild(createSelectField("Estimated effort", EFFORTS, task.estimatedMinutes ? String(task.estimatedMinutes) : "", "edit-effort"));
+
+    document.getElementById("edit-repeat-style")?.addEventListener("change", e => updateEditRepeatingScheduleFields(e.target.value));
+    updateEditRepeatingScheduleFields(style);
   } else if (type === "contact") {
     titleEl.textContent = "Edit Keep in Touch Task";
     fieldsDiv.appendChild(createInputField("Last contact date", "date", formatDateForInput(task.lastContact), "edit-date"));
@@ -515,8 +709,19 @@ function showEditModal(task, type, onSave) {
       frequency: document.getElementById("edit-frequency")?.value,
       area: document.getElementById("edit-area")?.value || "",
       priority: document.getElementById("edit-priority")?.value,
-      estimatedMinutes: document.getElementById("edit-effort")?.value || ""
+      estimatedMinutes: document.getElementById("edit-effort")?.value || "",
+      repeatStyle: document.getElementById("edit-repeat-style")?.value || "interval",
+      weekdays: selectedEditWeekdays(),
+      monthDays: parseMonthDaysInput(document.getElementById("edit-monthdays")?.value || "")
     };
+    if (type === "repeating" && values.repeatStyle === "weekdays" && !values.weekdays.length) {
+      alert("Choose at least one weekday for this scheduled routine.");
+      return;
+    }
+    if (type === "repeating" && values.repeatStyle === "monthdays" && !values.monthDays.length) {
+      alert("Enter at least one day of the month from 1 to 31.");
+      return;
+    }
     await onSave(values);
     hideEditModal();
   };
@@ -552,13 +757,29 @@ async function completeWithHistory(collectionName, type, docId, task, taskUpdate
 async function addRepeatingTask() {
   const owner = document.getElementById("r-owner").value;
   const name = document.getElementById("r-task-name").value.trim();
-  const frequency = parseInt(document.getElementById("r-frequency").value, 10);
   const area = document.getElementById("r-area").value;
   const priority = document.getElementById("r-priority").value || DEFAULT_PRIORITY;
   const effort = document.getElementById("r-effort").value;
+  const repeatStyle = document.getElementById("r-repeat-style")?.value || "interval";
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const task = { owner, name, frequency, lastCompleted: todayMidnight, streak: 0, type: "repeating", priority };
+  const task = { owner, name, lastCompleted: 0, streak: 0, type: "repeating", priority, repeatStyle };
+
+  if (repeatStyle === "interval") {
+    const frequency = parseInt(document.getElementById("r-frequency").value, 10);
+    if (!Number.isFinite(frequency) || frequency < 1) { alert("Enter a valid repeat frequency."); return; }
+    task.frequency = frequency;
+    task.lastCompleted = todayMidnight;
+  } else if (repeatStyle === "weekdays") {
+    const weekdays = selectedAddWeekdays();
+    if (!weekdays.length) { alert("Choose at least one weekday."); return; }
+    task.weekdays = weekdays;
+  } else if (repeatStyle === "monthdays") {
+    const monthDays = parseMonthDaysInput(document.getElementById("r-monthdays")?.value || "");
+    if (!monthDays.length) { alert("Enter at least one day of the month from 1 to 31."); return; }
+    task.monthDays = monthDays;
+  }
+
   if (area) task.area = area;
   if (effort) task.estimatedMinutes = Number(effort);
   await addDoc(collection(db, "repeatingTasks"), task);
@@ -568,25 +789,48 @@ async function addRepeatingTask() {
 }
 
 async function renderRepeatingTasks() {
-  let filtered = filterTasksByUser(await getRepeatingTasks()).map(task => ({ ...task, nextDue: task.lastCompleted + task.frequency * ONE_DAY }));
+  let filtered = filterTasksByUser(await getRepeatingTasks()).map(task => ({ ...task, nextDue: repeatingNextDue(task) }));
   filtered = sortByDue(filtered, task => task.nextDue);
   const list = document.getElementById("repeating-list");
   list.innerHTML = "";
   filtered.forEach(task => {
     const taskDiv = document.createElement("div");
-    taskDiv.className = taskVisualClasses(task, "repeating", task.nextDue, task.frequency);
-    taskDiv.innerHTML = `<span><strong>${escapeHtml(task.name)}</strong> (Every ${task.frequency} day${task.frequency > 1 ? "s" : ""})</span><small>Next due: ${escapeHtml(new Date(task.nextDue).toLocaleDateString())}</small>${metadataHtml(task, "repeating")}<div class="streak-visual">${getStreakVisual(task.streak)}</div><small>Owner: ${escapeHtml(task.owner)}</small>`;
-    taskDiv.appendChild(buildActions([
+    const style = repeatStyleFor(task);
+    const frequencyForVisual = style === "interval" ? task.frequency : null;
+    taskDiv.className = taskVisualClasses(task, "repeating", task.nextDue, frequencyForVisual);
+    const summary = repeatingScheduleSummary(task);
+    const nextDueText = Number.isFinite(task.nextDue) ? new Date(task.nextDue).toLocaleDateString() : "Schedule not set";
+    taskDiv.innerHTML = `<span><strong>${escapeHtml(task.name)}</strong> <span class="schedule-card-summary">(${escapeHtml(summary)})</span></span><small>Next due: ${escapeHtml(nextDueText)}</small>${metadataHtml(task, "repeating")}<div class="streak-visual">${getStreakVisual(effectiveRepeatingStreak(task))}</div><small>Owner: ${escapeHtml(task.owner)}</small>`;
+    const actions = buildActions([
       ["Completed Today", "complete-btn", () => markRepeatingTaskCompleted(task.docId, task)],
       ["Edit", "edit-btn", () => editRepeatingTask(task.docId, task)],
       ["Delete", "delete-btn", () => deleteRepeatingTask(task.docId)]
-    ]));
+    ]);
+    if (style !== "interval" && dayDifferenceFromToday(task.nextDue) !== 0) {
+      const complete = actions.querySelector(".complete-btn");
+      if (complete) {
+        complete.disabled = true;
+        complete.title = "Available on this routine's scheduled day";
+      }
+    }
+    taskDiv.appendChild(actions);
     list.appendChild(taskDiv);
   });
 }
 
 async function markRepeatingTaskCompleted(docId, task) {
   const now = Date.now();
+  const style = repeatStyleFor(task);
+  if (style !== "interval") {
+    const today = new Date();
+    if (!scheduleMatchesDate(task, today)) throw new Error("This routine is not scheduled for today.");
+    if (sameLocalDay(task.lastCompleted, today)) return;
+    const previousDue = previousScheduledOccurrence(task, today);
+    const continued = previousDue && sameLocalDay(task.lastCompleted, new Date(previousDue));
+    const streak = continued ? (task.streak || 0) + 1 : 1;
+    await completeWithHistory("repeatingTasks", "repeating", docId, task, { lastCompleted: now, streak }, now);
+    return;
+  }
   const prevDue = task.lastCompleted + task.frequency * ONE_DAY;
   const streak = now - prevDue <= ONE_DAY ? (task.streak || 0) + 1 : 0;
   await completeWithHistory("repeatingTasks", "repeating", docId, task, { lastCompleted: now, streak }, now);
@@ -598,10 +842,32 @@ function editRepeatingTask(docId, task) {
   showEditModal(task, "repeating", async values => {
     const updates = {};
     if (values.name) updates.name = values.name;
-    const ts = parseLocalDate(values.date).getTime();
-    if (!Number.isNaN(ts)) updates.lastCompleted = ts;
-    const freq = parseInt(values.frequency, 10);
-    if (Number.isFinite(freq) && freq > 0) updates.frequency = freq;
+    const oldStyle = repeatStyleFor(task);
+    const newStyle = values.repeatStyle || "interval";
+    updates.repeatStyle = newStyle;
+
+    if (newStyle === "interval") {
+      const ts = parseLocalDate(values.date).getTime();
+      if (!Number.isNaN(ts)) updates.lastCompleted = ts;
+      const freq = parseInt(values.frequency, 10);
+      if (!Number.isFinite(freq) || freq < 1) throw new Error("Frequency must be at least 1 day.");
+      updates.frequency = freq;
+      updates.weekdays = null;
+      updates.monthDays = null;
+    } else if (newStyle === "weekdays") {
+      if (!values.weekdays.length) throw new Error("Choose at least one weekday.");
+      updates.weekdays = values.weekdays;
+      updates.monthDays = null;
+      updates.frequency = null;
+      if (oldStyle !== newStyle) { updates.lastCompleted = 0; updates.streak = 0; }
+    } else if (newStyle === "monthdays") {
+      if (!values.monthDays.length) throw new Error("Choose at least one day of the month.");
+      updates.monthDays = values.monthDays;
+      updates.weekdays = null;
+      updates.frequency = null;
+      if (oldStyle !== newStyle) { updates.lastCompleted = 0; updates.streak = 0; }
+    }
+
     applyOptionalArea(updates, values.area);
     updates.priority = PRIORITY_LABELS[values.priority] ? values.priority : DEFAULT_PRIORITY;
     applyOptionalEffort(updates, values.estimatedMinutes);
@@ -770,7 +1036,7 @@ function buildActions(specs) {
     button.addEventListener("click", async () => {
       button.disabled = true;
       try { await handler(); }
-      catch (err) { console.error(`Lyfe action failed: ${label}`, err); alert("That action failed. Please try again."); }
+      catch (err) { console.error(`Lyfe action failed: ${label}`, err); alert(err?.message || "That action failed. Please try again."); }
       finally { button.disabled = false; }
     });
     actions.appendChild(button);
@@ -778,12 +1044,30 @@ function buildActions(specs) {
   return actions;
 }
 
+function scheduledOccurrencesForMonth(task, year, month) {
+  const results = [];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const candidate = new Date(year, month, day);
+    if (scheduleMatchesDate(task, candidate)) results.push(candidate);
+  }
+  return results;
+}
+
 function renderCalendarView() {
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   document.getElementById("current-month-label").textContent = `${monthNames[calendarMonth]} ${calendarYear}`;
   const activeFilters = Array.from(document.querySelectorAll(".calendar-filter:checked")).map(cb => cb.value);
   let tasks = [];
-  repeatingTasksCache.forEach(task => tasks.push({ ...task, displayDate: new Date(task.lastCompleted + task.frequency * ONE_DAY), taskType: "repeating", displayName: task.name || "No Name" }));
+  repeatingTasksCache.forEach(task => {
+    if (repeatStyleFor(task) === "interval") {
+      tasks.push({ ...task, displayDate: new Date(repeatingNextDue(task)), taskType: "repeating", displayName: task.name || "No Name" });
+    } else {
+      scheduledOccurrencesForMonth(task, calendarYear, calendarMonth).forEach(displayDate => {
+        tasks.push({ ...task, displayDate, taskType: "repeating", displayName: task.name || "No Name", nonOverduePast: true });
+      });
+    }
+  });
   contactTasksCache.forEach(task => tasks.push({ ...task, displayDate: new Date(task.lastContact + task.frequency * ONE_DAY), taskType: "contact", displayName: task.contactName || task.name || "No Name" }));
   todosCache.forEach(task => tasks.push({ ...task, displayDate: new Date(task.dueDate), taskType: "todo", displayName: task.name || "No Name" }));
   birthdaysCache.forEach(task => tasks.push({ ...task, displayDate: new Date(task.dueDate), taskType: "birthday", displayName: task.name || "No Name" }));
@@ -815,7 +1099,7 @@ function renderCalendarView() {
           const d = task.displayDate;
           return d.getFullYear() === cellDate.getFullYear() && d.getMonth() === cellDate.getMonth() && d.getDate() === cellDate.getDate();
         });
-        if (cellDate < todayMid && tasksForCell.length) cell.classList.add("overdue-day");
+        if (cellDate < todayMid && tasksForCell.some(task => !task.nonOverduePast)) cell.classList.add("overdue-day");
         tasksForCell.forEach(task => {
           const taskDiv = document.createElement("div");
           taskDiv.textContent = task.displayName;
