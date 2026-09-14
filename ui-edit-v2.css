@@ -30,7 +30,6 @@
   box-sizing: border-box;
 }
 
-/* iOS date/select controls otherwise keep a surprisingly large intrinsic width. */
 #edit-modal input[type="date"],
 #edit-modal input[type="number"],
 #edit-modal select {
@@ -47,6 +46,79 @@
 #edit-fields > .edit-field,
 .edit-grid-row > .edit-field {
   margin: 0;
+}
+
+.schedule-mode-panel[hidden],
+#edit-modal .edit-field[hidden],
+#edit-modal .repeat-weekdays-field[hidden],
+#edit-modal .repeat-interval-row:has(> .repeat-interval-field[hidden]) {
+  display: none !important;
+}
+
+.schedule-field-label,
+.schedule-mode-panel > label {
+  display: block;
+  margin: 0 0 5px;
+  font-size: .84rem;
+  font-weight: 500;
+  color: #56616c;
+}
+.schedule-mode-panel {
+  min-width: 0;
+  width: 100%;
+}
+.schedule-helper {
+  display: block;
+  margin-top: 4px;
+  color: #7a838c;
+  font-size: .75rem;
+  line-height: 1.25;
+}
+.weekday-picker {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  width: 100%;
+}
+.weekday-picker label {
+  min-width: 0;
+  margin: 0 !important;
+  cursor: pointer;
+}
+.weekday-picker input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.weekday-picker span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #d7dde3;
+  border-radius: 9px;
+  background: #f5f7f8;
+  color: #59636d;
+  font-size: .74rem;
+  font-weight: 600;
+  user-select: none;
+}
+.weekday-picker input:checked + span {
+  border-color: #087cf0;
+  background: #dcecff;
+  color: #075eb7;
+  box-shadow: inset 0 0 0 1px rgba(8,124,240,.08);
+}
+.schedule-card-summary {
+  color: #6e7780;
+  font-weight: 400;
+  font-size: .9em;
+}
+.task-actions .complete-btn:disabled {
+  opacity: .38 !important;
+  cursor: default !important;
+  transform: none !important;
 }
 
 .owner-only-detail {
@@ -101,7 +173,6 @@
   color: #59616a !important;
 }
 
-/* New area choices look intentional even though native selects render them. */
 #r-area,
 #t-area,
 #c-area,
@@ -152,14 +223,14 @@
     gap: 8px;
   }
 
-  #edit-modal .edit-field label {
+  #edit-modal .edit-field > label {
     margin: 0 0 4px !important;
     font-size: .76rem !important;
     line-height: 1.1;
     color: #65707a;
   }
 
-  #edit-modal #edit-form input,
+  #edit-modal #edit-form input:not([type="checkbox"]),
   #edit-modal #edit-form select {
     height: 43px !important;
     min-height: 43px !important;
@@ -169,8 +240,6 @@
     font-size: .96rem !important;
   }
 
-  /* Mobile Safari gives date inputs a larger intrinsic control height than
-     ordinary fields unless we explicitly normalize the native appearance. */
   #edit-modal #edit-form input[type="date"] {
     -webkit-appearance: none !important;
     appearance: none !important;
@@ -225,11 +294,16 @@
     font-size: .94rem !important;
   }
 
-  /* The normal edit state should fit on modern phones without vertical scroll.
-     If the user explicitly expands completion history or opens the keyboard,
-     vertical scrolling remains available by design. */
   #edit-modal .history-output:empty {
     display: none;
+  }
+
+  #repeating-form .schedule-mode-panel {
+    margin: 0;
+  }
+  #repeating-form .weekday-picker span {
+    height: 36px;
+    font-size: .72rem;
   }
 }
 
@@ -239,8 +313,10 @@
     padding-right: 12px !important;
   }
   .edit-grid-row { gap: 6px; }
-  #edit-modal #edit-form input,
+  #edit-modal #edit-form input:not([type="checkbox"]),
   #edit-modal #edit-form select {
     font-size: .9rem !important;
   }
+  .weekday-picker { gap: 3px; }
+  .weekday-picker span { font-size: .68rem; }
 }
