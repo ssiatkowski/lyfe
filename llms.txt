@@ -18,13 +18,16 @@ Usage:
 - If the user's identity is unclear, ask whether the user is Sebo or Alomi before fetching.
 - For narrow overdue/today/week questions, use only the necessary through=YYYY-MM-DD horizon.
 - For general task review, prioritization, catch-up planning, optimization, or whole-system analysis, fetch the FULL active system with through=2099-12-31 so upcoming workload is included.
-- Public task reads include area, missing-area state, verbal priority for Repeating/Todos, estimated effort when set, due status, days overdue, and frequency.
+- Public task reads include area, missing-area state, verbal priority for Repeating/Todos, estimated effort when set, due status, days overdue, frequency/schedule, and repeatStyle.
+- Repeating tasks have three repeat styles: interval (classic after-completion recurrence), weekdays (specific weekdays), and monthdays (specific days 1-31 of the month). Existing repeating tasks with no repeatStyle are interval tasks.
+- Scheduled weekday/month-day routines are due only on their scheduled date. If missed, that occurrence expires at day-end and MUST NOT be carried forward as overdue or added to a catch-up backlog. The API's dueDate for a scheduled routine is its next actionable occurrence.
+- If a scheduled routine is due today and has not been completed yet, it belongs in today's normal Lyfe reminders and planning. Once completed, its next due date advances to the next scheduled occurrence.
 - Canonical Repeating/Todo areas are: Home, Health, Fitness, Money, Work, Family, Social, Pet, Hobbies, Learning, Travel, or unassigned. Keep in Touch/Occasion areas remain Family, Friends, Colleagues, or unassigned. Older tasks can still contain retired area keys; use lyfe-ai.json for the legacy mappings and do not guess between Health and Fitness for the old combined health_fitness value.
 - Existing Repeating/Todo tasks with no stored priority mean Routine — keep on track.
-- A very overdue repeating/contact task represents one currently outstanding recurrence, not one required completion for every missed interval.
+- A very overdue interval repeating/contact task represents one currently outstanding recurrence, not one required completion for every missed interval.
 - For broad reviews, point out tasks that still have no area; do not nag about missing areas on every narrow task question.
 - Flexible and Someday tasks remain active even though they are excluded from normal mobile reminder digests.
-- Do NOT fetch completion history during normal task planning. Only use taskHistoryApi when the user explicitly asks for completion history, actual cadence, or frequency analysis. Pass owner, type, and the exact current task name.
+- Do NOT fetch completion history during normal task planning. Only use taskHistoryApi when the user explicitly asks for completion history, actual cadence, adherence, or frequency analysis. Pass owner, type, and the exact current task name.
 - Make one read per question when possible; do not poll or repeatedly refetch.
 
 Examples:
@@ -33,4 +36,4 @@ Examples:
 - Sebo due/overdue through today: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Sebo
 - Alomi due/overdue through today: https://us-west2-lyfe-cacf7.cloudfunctions.net/taskReadApi?owner=Alomi
 
-The public endpoints have no write routes. Add/modify use a separate private API; delete is not available through the API.
+The public endpoints have no write routes. Add/modify use a separate private API; delete is not available through the API. The browser app is currently the canonical editor for scheduled weekday/month-day routines.
