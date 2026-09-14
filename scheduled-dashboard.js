@@ -8,14 +8,9 @@ function isScheduledRoutineCard(card) {
 
 function updateScheduledCardVisibility(root = document) {
   root.querySelectorAll?.("#repeating-list .task-item").forEach(card => {
-    if (!isScheduledRoutineCard(card)) {
-      card.classList.remove("scheduled-routine-inactive");
-      return;
-    }
-    // Core scheduling marks an incomplete occurrence due today with due-today.
-    // After completion, the card immediately rerenders with its next future
-    // occurrence, so it drops out for the rest of the day automatically.
-    card.classList.toggle("scheduled-routine-inactive", !card.classList.contains("due-today"));
+    const inactive = isScheduledRoutineCard(card) && !card.classList.contains("due-today");
+    card.classList.toggle("scheduled-routine-inactive", inactive);
+    card.hidden = inactive;
   });
 }
 
