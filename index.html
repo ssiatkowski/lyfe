@@ -72,7 +72,31 @@
 
       <form id="repeating-form" class="task-form add-modal-form" data-add-form="repeating">
         <label for="r-task-name">Task</label><input type="text" id="r-task-name" placeholder="Task Name" required>
-        <label for="r-frequency">Frequency</label><input type="number" id="r-frequency" placeholder="Frequency (days)" min="1" required>
+        <label for="r-repeat-style">Repeat style</label>
+        <select id="r-repeat-style">
+          <option value="interval">After completion</option>
+          <option value="weekdays">Scheduled weekdays</option>
+          <option value="monthdays">Scheduled days of month</option>
+        </select>
+        <div id="r-interval-fields" class="schedule-mode-panel">
+          <label for="r-frequency">Frequency</label><input type="number" id="r-frequency" placeholder="Frequency (days)" min="1" required>
+        </div>
+        <div id="r-weekdays-fields" class="schedule-mode-panel" hidden>
+          <span class="schedule-field-label">Days of week</span>
+          <div class="weekday-picker" role="group" aria-label="Scheduled weekdays">
+            <label><input type="checkbox" name="r-weekday" value="mon"><span>Mon</span></label>
+            <label><input type="checkbox" name="r-weekday" value="tue"><span>Tue</span></label>
+            <label><input type="checkbox" name="r-weekday" value="wed"><span>Wed</span></label>
+            <label><input type="checkbox" name="r-weekday" value="thu"><span>Thu</span></label>
+            <label><input type="checkbox" name="r-weekday" value="fri"><span>Fri</span></label>
+            <label><input type="checkbox" name="r-weekday" value="sat"><span>Sat</span></label>
+            <label><input type="checkbox" name="r-weekday" value="sun"><span>Sun</span></label>
+          </div>
+        </div>
+        <div id="r-monthdays-fields" class="schedule-mode-panel" hidden>
+          <label for="r-monthdays">Days of month</label><input type="text" id="r-monthdays" inputmode="numeric" placeholder="e.g. 1, 15, 28">
+          <small class="schedule-helper">Use 1–31, separated by commas. A day that doesn't exist in a month is skipped.</small>
+        </div>
         <label for="r-area">Area</label><select id="r-area"></select>
         <label for="r-priority">Priority</label><select id="r-priority"></select>
         <label for="r-effort">Estimated effort</label><select id="r-effort"></select>
