@@ -25,10 +25,6 @@ const GENERAL_VALUE_BY_LABEL = Object.fromEntries(GENERAL_AREAS_V2.map(x => [x.l
 const RELATIONSHIP_BY_VALUE = Object.fromEntries(RELATIONSHIP_AREAS_V2.map(x => [x.value, x]));
 const RELATIONSHIP_VALUE_BY_LABEL = Object.fromEntries(RELATIONSHIP_AREAS_V2.map(x => [x.label.toLowerCase(), x.value]));
 
-// Old area values are interpreted without rewriting Firestore. Unambiguous old
-// areas migrate naturally the next time a task is edited and saved. The old
-// combined Health & Fitness category intentionally becomes unassigned because
-// only the user can decide which of the two new areas is correct.
 const LEGACY_GENERAL_AREA_MAP = {
   "money_finance": "money",
   "money & finance": "money",
@@ -225,14 +221,14 @@ function layoutEditModal() {
   if (!fields) return;
   compactOwnerDetail(fields);
   ensureEditActionRow();
-
-  // Core rebuilding edit-fields on every open gives us a clean signal that the
-  // compact layout needs to be recreated.
   if (fields.dataset.compactLayoutV2 === "1") return;
 
   const name = fieldFor("edit-name");
+  const repeatStyle = fieldFor("edit-repeat-style");
   const date = fieldFor("edit-date");
   const frequency = fieldFor("edit-frequency");
+  const weekdays = document.getElementById("edit-weekdays-field");
+  const monthdays = fieldFor("edit-monthdays");
   const area = fieldFor("edit-area");
   const priority = fieldFor("edit-priority");
   const effort = fieldFor("edit-effort");
@@ -243,20 +239,26 @@ function layoutEditModal() {
   const fragment = document.createDocumentFragment();
   if (name) fragment.appendChild(name);
 
-  if ((type === "repeating" || type === "contact") && date && frequency) {
+  if (type === "repeating") {
+    if (repeatStyle) fragment.appendChild(repeatStyle);
+    if (date && frequency) {
+      const intervalRow = makeGridRow(date, frequency);
+      intervalRow?.classList.add("repeat-interval-row");
+      if (intervalRow) fragment.appendChild(intervalRow);
+    }
+    if (weekdays) fragment.appendChild(weekdays);
+    if (monthdays) fragment.appendChild(monthdays);
+  } else if (type === "contact" && date && frequency) {
     fragment.appendChild(makeGridRow(date, frequency));
+  } else if (type === "birthday" && date && area) {
+    fragment.appendChild(makeGridRow(date, area));
   } else if (date) {
     fragment.appendChild(date);
   }
 
   if ((type === "repeating" || type === "todo") && area && effort) {
     fragment.appendChild(makeGridRow(area, effort));
-  } else if (type === "birthday" && date && area) {
-    // Birthday is intentionally tiny: date and relationship area share a row.
-    const existingDate = fragment.querySelector?.("#edit-date")?.closest?.(".edit-field");
-    if (existingDate) existingDate.remove();
-    fragment.appendChild(makeGridRow(date, area));
-  } else if (area) {
+  } else if (type !== "birthday" && area) {
     fragment.appendChild(area);
   }
 
@@ -271,8 +273,6 @@ function layoutEditModal() {
   fields.appendChild(fragment);
   fields.dataset.compactLayoutV2 = "1";
 
-  // New layout starts at the top every time, eliminating stale weird scroll
-  // positions from the previous edit session.
   const content = modal.querySelector(".modal-content");
   if (content) {
     content.scrollLeft = 0;
@@ -296,9 +296,6 @@ function initAreaAndEditV2() {
 
     mutations.forEach(mutation => {
       if (mutation.type === "childList") {
-        // Only changes inside the edit fields should trigger an edit relayout.
-        // This avoids feedback loops from unrelated DOM updates while the sheet
-        // happens to be open.
         if (mutation.target?.id === "edit-fields" || mutation.target?.closest?.("#edit-fields")) {
           shouldLayout = true;
         }
