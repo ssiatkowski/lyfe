@@ -1,6 +1,6 @@
 {
   "service": "Lyfe",
-  "version": 3,
+  "version": 4,
   "description": "Private life-management task app for Sebastian (Sebo) and Alomi, with deliberately public read-only AI endpoints for planning. The browser app requires Google sign-in. Writes are not public.",
   "homepage": "https://ssiatkowski.github.io/lyfe/",
   "intended_users": [
@@ -11,21 +11,23 @@
     "when_to_use": [
       "Whenever the user asks about their tasks, task list, overdue items, recurring tasks, upcoming tasks, planning, prioritization, catching up, productivity, or optimizing Lyfe.",
       "When the user asks what is overdue, due today, due soon, or due through a future date.",
-      "When the user asks for a broad life/task-system review, including whether priorities, areas, effort estimates, or recurrence frequencies should change."
+      "When the user asks for a broad life/task-system review, including whether priorities, areas, effort estimates, recurrence frequencies, or scheduled routines should change."
     ],
     "owner_selection": "Use owner=Sebo for Sebastian/Sebo and owner=Alomi for Alomi. If identity is not clear from conversation or saved context, ask which person before fetching. Never guess between Sebo and Alomi.",
     "shared_tasks": "Tasks owned by All are automatically included in either person's results.",
     "narrow_queries": "For narrow questions such as overdue, today, tonight, or this week, fetch only the date horizon needed.",
     "strategic_queries": "For broad review, catch-up planning, optimization, workload balancing, or questions about the whole task system, request the full active list using through=2099-12-31. Do not analyze only overdue tasks for these strategic questions because upcoming workload matters.",
     "planning_guidance": [
-      "Prioritize using due date, days overdue, verbal priority, estimated effort, recurrence frequency, area, task type, consequence of delay, and near-future workload rather than simply sorting by oldest due date.",
-      "Do not treat a very overdue repeating/contact task as requiring multiple completions. It represents one currently outstanding recurrence.",
+      "Prioritize using due date, days overdue, verbal priority, estimated effort, recurrence/schedule, area, task type, consequence of delay, and near-future workload rather than simply sorting by oldest due date.",
+      "Do not treat a very overdue interval repeating/contact task as requiring multiple completions. It represents one currently outstanding recurrence.",
+      "Scheduled repeating routines use repeatStyle=weekdays or repeatStyle=monthdays. They are due only on their scheduled date and expire at the end of that date. If missed, they do NOT become overdue the next day and must not be included in catch-up backlog as a missed outstanding task.",
+      "For a scheduled routine, dueDate in taskReadApi is its next currently actionable scheduled occurrence. If today's scheduled occurrence was already completed, dueDate advances to the next scheduled occurrence.",
       "Existing Repeating/Todo tasks that have no stored priority should be treated as Routine — keep on track.",
       "For broad reviews, point out tasks with missingArea=true and remind the user that they still need an area. Do not nag about missing areas on every narrow task question.",
       "If estimatedMinutes is null, do not invent an effort estimate unless the user asks you to estimate it.",
       "Flexible and Someday tasks remain real active tasks even though they do not trigger regular mobile notifications."
     ],
-    "completion_history_guidance": "Completion history is intentionally separate and must not be fetched during normal task reads. Only query taskHistoryApi when the user explicitly asks to inspect completion history, analyze actual completion cadence, compare configured frequency with behavior, or otherwise requests history-based analysis. Make one history request per specific task when possible.",
+    "completion_history_guidance": "Completion history is intentionally separate and must not be fetched during normal task reads. Only query taskHistoryApi when the user explicitly asks to inspect completion history, analyze actual completion cadence/adherence, compare configured frequency or schedule with behavior, or otherwise requests history-based analysis. Make one history request per specific task when possible.",
     "cost_guidance": "Make one task-list read request per user question when possible. Do not poll or repeatedly refetch to verify the same answer. Completion-history reads are opt-in only."
   },
   "schema": {
@@ -66,6 +68,23 @@
         }
       }
     },
+    "repeating_styles": {
+      "interval": {
+        "label": "After completion",
+        "meaning": "Classic repeating task. Its next due date is lastCompleted plus frequency days. If missed it remains outstanding/overdue until completed."
+      },
+      "weekdays": {
+        "label": "Scheduled weekdays",
+        "fields": { "weekdays": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] },
+        "meaning": "Routine is actionable only on selected weekdays. A missed occurrence expires at day-end instead of rolling forward."
+      },
+      "monthdays": {
+        "label": "Scheduled days of month",
+        "fields": { "monthDays": "Array of integers 1 through 31" },
+        "meaning": "Routine is actionable only on selected calendar days of each month. If a selected day does not exist in a month, that occurrence is skipped. A missed occurrence expires at day-end."
+      },
+      "legacy_default": "Repeating tasks without repeatStyle are interval tasks."
+    },
     "priorities": {
       "applies_to": ["repeating", "todo"],
       "default_for_legacy_tasks": "routine",
@@ -77,12 +96,13 @@
         { "value": "someday", "label": "Someday — no pressure" }
       ],
       "notification_behavior": {
-        "critical": "Included in normal 7 AM/8 PM digests. When overdue, also gets extra reminders at 8 AM, 1 PM, and 7 PM Pacific.",
-        "important": "Included in normal 7 AM/8 PM digests. When overdue, also gets an extra reminder at noon Pacific.",
-        "routine": "Included in normal 7 AM/8 PM digests.",
+        "critical": "Included in normal 7 AM/8 PM digests. Interval tasks that are overdue also get extra reminders at 8 AM, 1 PM, and 7 PM Pacific.",
+        "important": "Included in normal 7 AM/8 PM digests. Interval tasks that are overdue also get an extra reminder at noon Pacific.",
+        "routine": "Included in normal 7 AM/8 PM digest when due.",
         "flexible": "Visible in Lyfe and AI reads but excluded from regular mobile reminder digests.",
-        "someday": "Visible in Lyfe and AI reads but excluded from regular mobile reminder digests. It still becomes visually reddish in the UI when very overdue."
-      }
+        "someday": "Visible in Lyfe and AI reads but excluded from regular mobile reminder digests. It still becomes visually reddish in the UI when a non-expiring task is very overdue."
+      },
+      "scheduled_routine_note": "Scheduled routines appear in the normal 7 AM/8 PM digest if they are scheduled for that day and still incomplete. Because they expire instead of becoming overdue, they do not enter the extra overdue-only reminder path."
     },
     "estimated_effort": {
       "applies_to": ["repeating", "todo"],
@@ -95,7 +115,8 @@
       "storage": "Separate taskCompletionHistory documents, not embedded in normal task documents.",
       "maximum_stored_per_task": 100,
       "normal_task_reads_include_history": false,
-      "ui_behavior": "History is read only after the user opens a task and explicitly taps Load completion history."
+      "ui_behavior": "History is read only after the user opens a task and explicitly taps Completion history.",
+      "scheduled_routines": "History records completed scheduled occurrences. Missed occurrences are not stored as separate documents; they are inferred from the schedule when doing adherence analysis."
     }
   },
   "public_read_api": {
@@ -111,10 +132,13 @@
       "tasks[].type": "todo, repeating, contact, or birthday",
       "tasks[].name": "Human-readable task name",
       "tasks[].owner": "Sebo, Alomi, or All",
-      "tasks[].dueDate": "YYYY-MM-DD",
-      "tasks[].status": "overdue, due_today, or upcoming",
-      "tasks[].daysOverdue": "Positive integer if overdue, otherwise 0",
-      "tasks[].frequency": "Days between occurrences when applicable",
+      "tasks[].dueDate": "YYYY-MM-DD. For a scheduled routine this is its next currently actionable scheduled occurrence, never an expired missed occurrence.",
+      "tasks[].status": "overdue, due_today, or upcoming. Scheduled routines will be due_today/upcoming, not overdue.",
+      "tasks[].daysOverdue": "Positive integer if overdue, otherwise 0. Scheduled routines are never carried as overdue.",
+      "tasks[].frequency": "Days between occurrences for interval repeating/contact tasks when applicable.",
+      "tasks[].repeatStyle": "For repeating tasks: interval, weekdays, or monthdays.",
+      "tasks[].weekdays": "For repeatStyle=weekdays: selected weekday codes.",
+      "tasks[].monthDays": "For repeatStyle=monthdays: selected calendar days 1-31.",
       "tasks[].area": "Area key, or null when unassigned. Legacy area keys may still appear on older tasks; use schema.areas.repeating_and_todos.legacy_values to interpret them.",
       "tasks[].missingArea": "true when no area has been assigned",
       "tasks[].priority": "Verbal-priority key for Repeating/Todo. Legacy missing priority is normalized to routine.",
@@ -133,11 +157,11 @@
       "type": { "required": true, "accepted": ["repeating", "contact", "birthday"] },
       "name": { "required": true, "description": "Exact current task name from taskReadApi." }
     },
-    "response": "Returns up to the last 100 completion timestamps/dates, configured frequency, and average observed interval. It performs extra Firestore reads and should never be called during normal planning unless the user asked for history-based analysis."
+    "response": "Returns up to the last 100 completion timestamps/dates plus interval frequency or scheduled-repeat metadata and average observed interval. It performs extra Firestore reads and should never be called during normal planning unless the user asked for history/adherence analysis."
   },
   "private_write_api": {
     "url": "https://us-west2-lyfe-cacf7.cloudfunctions.net/taskApi",
     "public": false,
-    "description": "Add and modify operations require a private per-person API key. Delete is intentionally not exposed by the API."
+    "description": "Add and modify operations require a private per-person API key. Delete is intentionally not exposed by the API. The browser app is currently the canonical editor for scheduled weekday/month-day routines."
   }
 }
